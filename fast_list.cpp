@@ -8,8 +8,11 @@ static const int CHANGE_SIGN = -1;
 static int* InitDataArray(const size_t capacity, ERRORS* error);
 static int* InitNextArray(const size_t capacity, ERRORS* error);
 static int* InitPrevArray(const size_t capacity, ERRORS* error);
+static inline void InitListElem(list_t* list, const size_t pos, const int value,
+                                              const size_t prev_pos, const size_t next_pos);
 
-static inline void AddFreeElemInList(list_t* list, const size_t pos);
+static inline void   AddFreeElemInList(list_t* list, const size_t pos);
+static inline size_t GetFreeElemFromList(list_t* list, const size_t pos);
 
 static inline void LogPrintArray(const int* array, size_t size, const char* name);
 
@@ -71,12 +74,9 @@ static int* InitNextArray(const size_t capacity, ERRORS* error)
         return nullptr;
     }
 
-    next[0] = 0;
     //                              v-- we dont need to fill last element
     for (size_t i = 1; i < capacity - 1; i++)
         next[i] = CHANGE_SIGN * (i + 1);
-
-    next[capacity - 1] = 0;
 
     return next;
 }
@@ -93,8 +93,6 @@ static int* InitPrevArray(const size_t capacity, ERRORS* error)
         *error = ERRORS::ALLOCATE_MEMORY;
         return nullptr;
     }
-
-    prev[0] = 0;
 
     for (size_t i = 1; i < capacity; i++)
         prev[i] = -1;
@@ -120,24 +118,52 @@ void ListDtor(list_t* list)
 
 //-----------------------------------------------------------------------------------------------------
 
-ERRORS ListInsertElem(list_t* list, const size_t pos, const int value)
+ERRORS ListInsertElem(list_t* list, const size_t pos, const int value, size_t* inserted_pos)
 {
     assert(list);
 
-    int free_pos = list->free;
+    ERRORS error = ERRORS::NONE;
 
-    if (pos == list->tail)
-    {
-        int prev_pos = pos;
-        int next_pos = 0;
-    }
+    int free_pos  = GetFreeElemFromList(list, pos);
+    *inserted_pos = free_pos;
+
+    InitListElem(list, free_pos, value, pos, list->next[pos]);
+
+    if (pos != list->tail)
+        list->prev[list->next[free_pos]] = free_pos;
     else
-    {
-        int prev_pos = pos;
-        int next_pos = list->next[pos];
-    }
+        list->tail = free_pos;
 
+    if (list->prev[free_pos] != 0)
+        list->next[list->prev[free_pos]] = free_pos;
+    else
+        list->head = free_pos;
 
+    return error;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline size_t GetFreeElemFromList(list_t* list, const size_t pos)
+{
+    assert(list);
+
+    int free_pos  = list->free;
+    list->free    = CHANGE_SIGN * list->next[free_pos];
+
+    return free_pos;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline void InitListElem(list_t* list, const size_t pos, const int value,
+                                              const size_t prev_pos, const size_t next_pos)
+{
+    assert(list);
+
+    list->data[pos] = value;
+    list->prev[pos] = prev_pos;
+    list->next[pos] = next_pos;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -146,29 +172,32 @@ ERRORS ListRemoveElem(list_t* list, const size_t pos)
 {
     assert(list);
 
+    ERRORS error = ERRORS::NONE;
+
     // add realloc
 
-    if (list->head == list->tail)
+    if (list->tail == 0)
         return ERRORS::EMPTY_LIST;
 
-    if (list->tail == pos)
+    if (list->tail != pos)
+        list->next[list->prev[pos]] = list->next[pos];
+    else
     {
         list->tail = list->prev[pos];
         list->next[list->tail] = 0;
     }
-    else if (list->head == pos)
+
+    if (list->head != pos)
+        list->prev[list->next[pos]] = list->prev[pos];
+    else
     {
         list->head = list->next[pos];
         list->prev[list->head] = 0;
     }
-    else
-    {
-        list->next[list->prev[pos]] = list->next[pos];
-        list->prev[list->next[pos]] = list->prev[pos];
-    }
 
     AddFreeElemInList(list, pos);
 
+    return error;
 }
 
 //-----------------------------------------------------------------------------------------------------
