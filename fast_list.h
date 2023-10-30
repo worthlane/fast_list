@@ -8,21 +8,63 @@ struct List
     int* data;
     int* next;
     int* prev;
+
     int head;
     int tail;
     int free;
+
     size_t capacity;
+    size_t size;
 };
+
+enum class ListErrors
+{
+    NONE = 0,
+
+    ALLOCATE_MEMORY,
+    EMPTY_LIST,
+    EMPTY_ELEMENT,
+
+    UNKNOWN
+};
+
+#ifdef EXIT_IF_LISTERROR
+#undef EXIT_IF_LISTERROR
+
+#endif
+#define EXIT_IF_LISTERROR(error)            do                                                          \
+                                            {                                                           \
+                                                if ((error)->code != (int) ListErrors::NONE)            \
+                                                {                                                       \
+                                                    return LogDump(PrintListError, error, __func__,     \
+                                                                    __FILE__, __LINE__);                \
+                                                }                                                       \
+                                            } while(0)
+#ifdef RETURN_IF_LISTERROR
+#undef RETURN_IF_LISTERROR
+
+#endif
+#define RETURN_IF_LISTERROR(error)          do                                                          \
+                                            {                                                           \
+                                                if ((error) != ListErrors::NONE)                        \
+                                                {                                                       \
+                                                    return error;                                       \
+                                                }                                                       \
+                                            } while(0)
+
 
 typedef struct List list_t;
 
 static const size_t DEFAULT_LIST_CAPACITY = 16;
 
-ERRORS ListCtor(list_t* list, size_t capacity = DEFAULT_LIST_CAPACITY);
-void   ListDtor(list_t* list);
-ERRORS ListInsertElem(list_t* list, const size_t pos, const int value, size_t* inserted_pos);
-ERRORS ListRemoveElem(list_t* list, const size_t pos);
-int    ListDump(FILE* fp, const void* list, const char* func, const char* file, const int line);
+ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity = DEFAULT_LIST_CAPACITY);
+void       ListDtor(list_t* list);
+ListErrors ListInsertElem(list_t* list, const size_t pos, const int value,
+                                        size_t* inserted_pos, ErrorInfo* error);
+ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error);
+int        ListDump(FILE* fp, const void* list, const char* func, const char* file, const int line);
+
+int PrintListError(FILE* fp, const void* err, const char* func, const char* file, const int line);
 
 #ifdef DUMP_LIST
 #undef DUMP_LIST

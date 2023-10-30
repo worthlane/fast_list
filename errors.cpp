@@ -8,13 +8,13 @@ int PrintError(FILE* fp, const void* err, const char* func, const char* file, co
 {
     assert(err);
 
-    LOG_START_MOD(func, file, line);
+    LOG_START(func, file, line);
 
     #pragma GCC diagnostic ignored "-Wcast-qual"
     struct ErrorInfo* error = (struct ErrorInfo*) err;
     #pragma GCC diagnostic warning "-Wcast-qual"
 
-    switch (error->code)
+    switch ((ERRORS) error->code)
     {
         case (ERRORS::NONE):
             LOG_END();

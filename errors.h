@@ -14,7 +14,7 @@
 #endif
 #define EXIT_IF_ERROR(error)                do                                                          \
                                             {                                                           \
-                                                if ((error)->code != ERRORS::NONE)                      \
+                                                if ((error)->code != (int) ERRORS::NONE)                \
                                                 {                                                       \
                                                     return LogDump(PrintError, error, __func__,         \
                                                                     __FILE__, __LINE__);                \
@@ -66,7 +66,7 @@ enum class ERRORS
 
     USER_QUIT,
 
-    EMPTY_LIST,
+    INVALID_LIST,
 
     /// unknown error
     UNKNOWN
@@ -76,7 +76,7 @@ enum class ERRORS
 struct ErrorInfo
 {
     /// error code
-    ERRORS code;
+    int code;
     /// error data
     const void* data;
 };

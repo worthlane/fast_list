@@ -48,12 +48,14 @@ int PrintLog (const char *format, ...);
 #undef LOG_START
 
 #endif
-#define LOG_START()         do                                                                      \
-                            {                                                                       \
-                                PrintLog("--------------------------------------------------\n"     \
-                                         "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)\n",              \
-                                         __func__, __FILE__, __LINE__);                             \
-                            } while(0)
+#define LOG_START(func, file, line)         do                                                              \
+                                            {                                                               \
+                                                    PrintLog(                                               \
+                                                    "--------------------LOGS CALLED--------------------\n" \
+                                                    "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)\n",           \
+                                                    func, file, line);                                      \
+                                            } while (0)
+
 
 #ifdef LOG_END
 #undef LOG_END
@@ -72,14 +74,14 @@ int PrintLog (const char *format, ...);
 #endif
 #define LOG_SEPARATOR()     PrintLog("\n........................................\n\n");
 
-#ifdef LOG_START_MOD
-#undef LOG_START_MOD
+#ifdef LOG_START_DUMP
+#undef LOG_START_DUMP
 
 #endif
-#define LOG_START_MOD(func, file, line)     do                                                              \
+#define LOG_START_DUMP(func, file, line)     do                                                             \
                                             {                                                               \
                                                     PrintLog(                                               \
-                                                    "--------------------LOG CALLED--------------------\n"  \
+                                                    "--------------------DUMP CALLED--------------------\n" \
                                                     "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)\n",           \
                                                     func, file, line);                                      \
                                             } while (0)

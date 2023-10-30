@@ -5,9 +5,9 @@
 static const int POISON      = -2147483647;
 static const int CHANGE_SIGN = -1;
 
-static int* InitDataArray(const size_t capacity, ERRORS* error);
-static int* InitNextArray(const size_t capacity, ERRORS* error);
-static int* InitPrevArray(const size_t capacity, ERRORS* error);
+static int* InitDataArray(const size_t capacity, ErrorInfo* error);
+static int* InitNextArray(const size_t capacity, ErrorInfo* error);
+static int* InitPrevArray(const size_t capacity, ErrorInfo* error);
 static inline void InitListElem(list_t* list, const size_t pos, const int value,
                                               const size_t prev_pos, const size_t next_pos);
 
@@ -16,42 +16,44 @@ static inline size_t GetFreeElemFromList(list_t* list, const size_t pos);
 
 static inline void LogPrintArray(const int* array, size_t size, const char* name);
 
-ERRORS ListCtor(list_t* list, size_t capacity)
+ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity)
 {
     assert(list);
 
-    ERRORS error = ERRORS::NONE;
+    int* data = InitDataArray(capacity, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    int* data = InitDataArray(capacity, &error);
-    RETURN_IF_ERROR(error);
+    int* next = InitNextArray(capacity, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    int* next = InitNextArray(capacity, &error);
-    RETURN_IF_ERROR(error);
-
-    int* prev = InitPrevArray(capacity, &error);
-    RETURN_IF_ERROR(error);
+    int* prev = InitPrevArray(capacity, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
 
     list->data     = data;
     list->next     = next;
     list->prev     = prev;
+
     list->head     = 0;
     list->tail     = 0;
     list->free     = 1;
-    list->capacity = capacity;
 
-    return error;
+    list->capacity = capacity;
+    list->size     = 0;
+
+    return ListErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static int* InitDataArray(const size_t capacity, ERRORS* error)
+static int* InitDataArray(const size_t capacity, ErrorInfo* error)
 {
     assert(error);
 
     int* data = (int*) calloc(capacity, sizeof(int));
     if (data == nullptr)
     {
-        *error = ERRORS::ALLOCATE_MEMORY;
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "DATA ARRAY";
         return nullptr;
     }
 
@@ -63,14 +65,15 @@ static int* InitDataArray(const size_t capacity, ERRORS* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-static int* InitNextArray(const size_t capacity, ERRORS* error)
+static int* InitNextArray(const size_t capacity, ErrorInfo* error)
 {
     assert(error);
 
     int* next = (int*) calloc(capacity, sizeof(int));
     if (next == nullptr)
     {
-        *error = ERRORS::ALLOCATE_MEMORY;
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "NEXT ARRAY";
         return nullptr;
     }
 
@@ -83,14 +86,15 @@ static int* InitNextArray(const size_t capacity, ERRORS* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-static int* InitPrevArray(const size_t capacity, ERRORS* error)
+static int* InitPrevArray(const size_t capacity, ErrorInfo* error)
 {
     assert(error);
 
     int* prev = (int*) calloc(capacity, sizeof(int));
     if (prev == nullptr)
     {
-        *error = ERRORS::ALLOCATE_MEMORY;
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "PREV ARRAY";
         return nullptr;
     }
 
@@ -113,16 +117,17 @@ void ListDtor(list_t* list)
     list->head     = POISON;
     list->tail     = POISON;
     list->free     = POISON;
+
     list->capacity = 0;
+    list->size     = 0;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-ERRORS ListInsertElem(list_t* list, const size_t pos, const int value, size_t* inserted_pos)
+ListErrors ListInsertElem(list_t* list, const size_t pos, const int value,
+                                        size_t* inserted_pos, ErrorInfo* error)
 {
     assert(list);
-
-    ERRORS error = ERRORS::NONE;
 
     int free_pos  = GetFreeElemFromList(list, pos);
     *inserted_pos = free_pos;
@@ -139,7 +144,9 @@ ERRORS ListInsertElem(list_t* list, const size_t pos, const int value, size_t* i
     else
         list->head = free_pos;
 
-    return error;
+    list->size++;
+
+    return ListErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -168,16 +175,24 @@ static inline void InitListElem(list_t* list, const size_t pos, const int value,
 
 //-----------------------------------------------------------------------------------------------------
 
-ERRORS ListRemoveElem(list_t* list, const size_t pos)
+ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
 {
     assert(list);
-
-    ERRORS error = ERRORS::NONE;
 
     // add realloc
 
     if (list->tail == 0)
-        return ERRORS::EMPTY_LIST;
+    {
+        error->code = (int) ListErrors::EMPTY_LIST;
+        return ListErrors::EMPTY_LIST;
+    }
+
+    if (list->data[pos] == POISON)
+    {
+        error->code = (int) ListErrors::EMPTY_ELEMENT;
+        error->data = list;
+        return ListErrors::EMPTY_ELEMENT;
+    }
 
     if (list->tail != pos)
         list->next[list->prev[pos]] = list->next[pos];
@@ -196,8 +211,9 @@ ERRORS ListRemoveElem(list_t* list, const size_t pos)
     }
 
     AddFreeElemInList(list, pos);
+    list->size--;
 
-    return error;
+    return ListErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -219,7 +235,7 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
 {
     assert(fast_list);
 
-    LOG_START_MOD(func, file, line);
+    LOG_START_DUMP(func, file, line);
 
     #pragma GCC diagnostic ignored "-Wcast-qual"
     list_t* list = (list_t*) fast_list;
@@ -243,7 +259,7 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
 
     LOG_END();
 
-    return (int) ERRORS::NONE;
+    return (int) ListErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -264,4 +280,47 @@ static inline void LogPrintArray(const int* array, size_t size, const char* name
     }
 
     PrintLog("\n");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+int PrintListError(FILE* fp, const void* err, const char* func, const char* file, const int line)
+{
+    assert(err);
+
+    LOG_START(func, file, line);
+
+    #pragma GCC diagnostic ignored "-Wcast-qual"
+    struct ErrorInfo* error = (struct ErrorInfo*) err;
+    #pragma GCC diagnostic warning "-Wcast-qual"
+
+    switch ((ListErrors) error->code)
+    {
+        case (ListErrors::NONE):
+            LOG_END();
+            return (int) error->code;
+
+        case (ListErrors::EMPTY_LIST):
+            fprintf(fp, "CAN NOT REMOVE ELEMENT FROM EMPTY LIST\n");
+            LOG_END();
+            return (int) error->code;
+
+        case (ListErrors::ALLOCATE_MEMORY):
+            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM LIST\n", (char*) error->data);
+            LOG_END();
+            return (int) error->code;
+
+        case (ListErrors::EMPTY_ELEMENT):
+            fprintf(fp, "CAN NOT REMOVE ALREADY EMPTY ELEMENT\n");
+            DUMP_LIST((list_t*) error->data);
+            LOG_END();
+            return (int) error->code;
+
+        case (ListErrors::UNKNOWN):
+        // fall through
+        default:
+            fprintf(fp, "UNKNOWN ERROR WITH LIST\n");
+            LOG_END();
+            return (int) ListErrors::UNKNOWN;
+    }
 }

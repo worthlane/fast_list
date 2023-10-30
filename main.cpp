@@ -10,37 +10,36 @@ int main(const int argc, const char* argv[])
 
     list_t list = {};
 
-    ListCtor(&list);
+    ErrorInfo error = {};
+
+    ListCtor(&list, &error);
 
     DUMP_LIST(&list);
 
     size_t a = 0;
     size_t b = 0;
 
-    ListInsertElem(&list, 0, 23, &a);
-    ListInsertElem(&list, a, 28, &b);
-    ListInsertElem(&list, a, 29, &b);
+    ListInsertElem(&list, 0, 23, &a, &error);
+    ListInsertElem(&list, a, 28, &b, &error);
+    ListInsertElem(&list, a, 29, &b, &error);
 
     DUMP_LIST(&list);
 
-    ListRemoveElem(&list, 1);
+    ListRemoveElem(&list, 1, &error);
 
     DUMP_LIST(&list);
 
-    ListRemoveElem(&list, 2);
+    ListRemoveElem(&list, 2, &error);
 
     DUMP_LIST(&list);
 
-    ErrorInfo error = {};
-
-    error.code = ListRemoveElem(&list, 3);
-    EXIT_IF_ERROR(&error);
+    ListRemoveElem(&list, 8, &error);
+    EXIT_IF_LISTERROR(&error);
 
     DUMP_LIST(&list);
 
-    ListInsertElem(&list, 0, 23, &a);
-    ListInsertElem(&list, a, 28, &b);
-    ListInsertElem(&list, a, 29, &b);
+    ListRemoveElem(&list, 3, &error);
+    EXIT_IF_LISTERROR(&error);
 
     DUMP_LIST(&list);
 
