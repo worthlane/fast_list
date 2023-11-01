@@ -59,8 +59,8 @@ static const size_t DEFAULT_LIST_CAPACITY = 16;
 
 ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity = DEFAULT_LIST_CAPACITY);
 void       ListDtor(list_t* list);
-ListErrors ListInsertElem(list_t* list, const size_t pos, const int value,
-                                        size_t* inserted_pos, ErrorInfo* error);
+ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
+                                             size_t* inserted_pos, ErrorInfo* error);
 ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error);
 int        ListDump(FILE* fp, const void* list, const char* func, const char* file, const int line);
 

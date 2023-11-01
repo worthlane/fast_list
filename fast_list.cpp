@@ -2,8 +2,9 @@
 
 #include "fast_list.h"
 
-static const int POISON      = -2147483647;
-static const int CHANGE_SIGN = -1;
+static const int    POISON           = -2147483647;
+static const int    CHANGE_SIGN      = -1;
+static const size_t FICTIVE_ELEM_POS =  0;
 
 static int* InitDataArray(const size_t capacity, ErrorInfo* error);
 static int* InitNextArray(const size_t capacity, ErrorInfo* error);
@@ -14,7 +15,17 @@ static inline void InitListElem(list_t* list, const size_t pos, const int value,
 static inline void   AddFreeElemInList(list_t* list, const size_t pos);
 static inline size_t GetFreeElemFromList(list_t* list, const size_t pos);
 
+static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo* error);
+
 static inline void LogPrintArray(const int* array, size_t size, const char* name);
+
+// ========= GRAPHS ==========
+
+static const char* DOT_FILE = "list.dot";
+
+static void DrawListGraph(list_t* list);
+
+// ===========================
 
 ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity)
 {
@@ -124,7 +135,7 @@ void ListDtor(list_t* list)
 
 //-----------------------------------------------------------------------------------------------------
 
-ListErrors ListInsertElem(list_t* list, const size_t pos, const int value,
+ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
                                         size_t* inserted_pos, ErrorInfo* error)
 {
     assert(list);
@@ -137,12 +148,18 @@ ListErrors ListInsertElem(list_t* list, const size_t pos, const int value,
     if (pos != list->tail)
         list->prev[list->next[free_pos]] = free_pos;
     else
-        list->tail = free_pos;
+    {
+        list->tail                   = free_pos;
+        list->prev[FICTIVE_ELEM_POS] = list->tail;
+    }
 
     if (list->prev[free_pos] != 0)
         list->next[list->prev[free_pos]] = free_pos;
     else
-        list->head = free_pos;
+    {
+        list->head                   = free_pos;
+        list->next[FICTIVE_ELEM_POS] = list->head;
+    }
 
     list->size++;
 
@@ -181,18 +198,8 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
 
     // add realloc
 
-    if (list->tail == 0)
-    {
-        error->code = (int) ListErrors::EMPTY_LIST;
-        return ListErrors::EMPTY_LIST;
-    }
-
-    if (list->data[pos] == POISON)
-    {
-        error->code = (int) ListErrors::EMPTY_ELEMENT;
-        error->data = list;
-        return ListErrors::EMPTY_ELEMENT;
-    }
+    CheckRemovingElement(list, pos, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
 
     if (list->tail != pos)
         list->next[list->prev[pos]] = list->next[pos];
@@ -214,6 +221,24 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
     list->size--;
 
     return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo* error)
+{
+    if (list->tail == 0)
+    {
+        error->code = (int) ListErrors::EMPTY_LIST;
+        return;
+    }
+
+    if (list->data[pos] == POISON)
+    {
+        error->code = (int) ListErrors::EMPTY_ELEMENT;
+        error->data = list;
+        return;
+    }
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -256,6 +281,8 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
              "TAIL     > %d\n"
              "FREE     > %d\n"
              "CAPACITY > %d\n", list->head, list->tail, list->free, list->capacity);
+
+    DrawListGraph(list);
 
     LOG_END();
 
@@ -323,4 +350,71 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
             LOG_END();
             return (int) ListErrors::UNKNOWN;
     }
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void DrawListGraph(list_t* list)
+{
+    assert(list);
+
+    FILE* dotf = fopen(DOT_FILE, "w");
+
+    fprintf(dotf, "digraph structs {\n"
+	              "rankdir=LR;\n"
+	              "node[color=\"black\",fontsize=14];\n"
+	              "edge[color=\"darkblue\",fontcolor=\"yellow\",fontsize=12];\n");
+
+    fprintf(dotf,   "head [shape=signature, label=\"HEAD\", fillcolor=\"yellow\", style=filled ];\n"
+	                "tail [shape=signature, label=\"TAIL\", fillcolor=\"yellow\", style=filled ];\n"
+	                "free [shape=signature, label=\"FREE\", fillcolor=\"yellow\", style=filled ];\n"
+                    "head->%d[color = \"black\"];\n"
+	                "tail->%d[color = \"black\"];\n"
+	                "free->%d[color = \"black\"];\n",
+                    list->head, list->tail, list->free);
+
+    for (int i = 0; i < list->capacity; i++)
+    {
+        fprintf(dotf, "%d [shape=Mrecord, style=filled, ", i);
+        if (list->prev[i] == -1)
+            fprintf(dotf, "fillcolor=\"lightgreen\", color = darkgreen,");
+        else if (list->data[i] == POISON)
+            fprintf(dotf, "fillcolor=\"lightgray\", color = black,");
+        else
+            fprintf(dotf, "fillcolor=\"lightblue\", color = darkblue,");
+
+        if (list->data[i] == POISON)
+        {
+            fprintf(dotf, " label=\" ip: %d | data: NaN| <n%d> next: %d| <p%d> prev: %d\" ];\n",
+                            i, i, list->next[i], i, list->prev[i]);
+        }
+        else
+        {
+            fprintf(dotf, " label=\" ip: %d | data: %d| <n%d> next: %d| <p%d> prev: %d\" ];\n",
+                            i, list->data[i], i, list->next[i], i, list->prev[i]);
+        }
+    }
+
+    fprintf(dotf, "0");
+    for (int i = 1; i < list->capacity; i++)
+    {
+        fprintf(dotf, "->%d", i);
+    }
+    fprintf(dotf, "[weight = 993, color = \"white\"];\n");
+
+    for (int i = 0; i < list->capacity; i++)
+    {
+        if (list->prev[i] != -1)
+            fprintf(dotf, "%d -> %d [color = \"red\"];\n", i, list->prev[i]);
+
+        int next = list->next[i];
+        if (next < 0)
+            next *= CHANGE_SIGN;
+
+        fprintf(dotf, "%d -> %d [color = \"green\"];\n", i, next);
+    }
+
+    fprintf(dotf, "}");
+
+    fclose(dotf);
 }

@@ -19,9 +19,9 @@ int main(const int argc, const char* argv[])
     size_t a = 0;
     size_t b = 0;
 
-    ListInsertElem(&list, 0, 23, &a, &error);
-    ListInsertElem(&list, a, 28, &b, &error);
-    ListInsertElem(&list, a, 29, &b, &error);
+    ListInsertAfterElem(&list, 0, 23, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &b, &error);
+    ListInsertAfterElem(&list, a, 29, &b, &error);
 
     DUMP_LIST(&list);
 
@@ -33,13 +33,14 @@ int main(const int argc, const char* argv[])
 
     DUMP_LIST(&list);
 
-    ListRemoveElem(&list, 8, &error);
+    ListRemoveElem(&list, 3, &error);
     EXIT_IF_LISTERROR(&error);
 
     DUMP_LIST(&list);
 
-    ListRemoveElem(&list, 3, &error);
-    EXIT_IF_LISTERROR(&error);
+    ListInsertAfterElem(&list, 0, 23, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &b, &error);
+    ListInsertAfterElem(&list, a, 29, &b, &error);
 
     DUMP_LIST(&list);
 
