@@ -13,6 +13,7 @@ CXXFLAGS =  -D _DEBUG -ggdb3 -std=c++17 -O0 -Wall -Wextra -Weffc++ -Waggressive-
 			-Wno-old-style-cast -Wno-varargs -Wstack-protector -fcheck-new -fsized-deallocation    \
 			-fstack-protector -fstrict-overflow -fno-omit-frame-pointer -Wlarger-than=8192         \
 			-Wstack-usage=8192 -fPIE -Werror=vla
+IMAGE = img
 BUILD_DIR = build/bin
 OBJECTS_DIR = build
 SOURCES = main.cpp logs.cpp fast_list.cpp errors.cpp
@@ -35,10 +36,11 @@ doxybuild:
 	$(DOXYBUILD)
 
 clean:
-	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o
+	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png
 
 makedirs:
 	mkdir -p $(BUILD_DIR)
+	mkdir -p $(IMAGE)
 
 test:
 	$(CXX) $(CXXFLAGS) $(SOURCES)

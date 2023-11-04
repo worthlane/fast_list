@@ -1,10 +1,13 @@
 #include <assert.h>
+#include <time.h>
 
 #include "fast_list.h"
 
 static const int    POISON           = -2147483647;
 static const int    CHANGE_SIGN      = -1;
 static const size_t FICTIVE_ELEM_POS =  0;
+static const int    CPTY_MULTIPLIER  =  2;
+static const size_t MAX_DOT_CMD_LEN  =  200;
 
 static int* InitDataArray(const size_t capacity, ErrorInfo* error);
 static int* InitNextArray(const size_t capacity, ErrorInfo* error);
@@ -17,6 +20,11 @@ static inline size_t GetFreeElemFromList(list_t* list, const size_t pos);
 
 static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo* error);
 
+static ListErrors MakeListLonger(list_t* list, ErrorInfo* error);
+static int* ReallocDataArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
+static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
+static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
+
 static inline void LogPrintArray(const int* array, size_t size, const char* name);
 
 // ========= GRAPHS ==========
@@ -24,6 +32,17 @@ static inline void LogPrintArray(const int* array, size_t size, const char* name
 static const char* DOT_FILE = "list.dot";
 
 static void DrawListGraph(list_t* list);
+
+static inline void StartGraph(FILE* dotf, const list_t* list);
+
+static inline void DrawListInfo(FILE* dotf, const list_t* list);
+static inline void DrawListElements(FILE* dotf, const list_t* list);
+static inline void CenterListElements(FILE* dotf, const list_t* list);
+static inline void DrawListArrows(FILE* dotf, const list_t* list);
+
+static inline void EndGraph(FILE* dotf, const list_t* list);
+
+static size_t IMG_CNT = 1;
 
 // ===========================
 
@@ -135,10 +154,41 @@ void ListDtor(list_t* list)
 
 //-----------------------------------------------------------------------------------------------------
 
+#ifdef CHECK_LIST
+#undef CHECK_LIST
+
+#endif
+#define CHECK_LIST(list)    do                                                              \
+                            {                                                               \
+                                ListErrors list_err_ = ListVerify(list);                    \
+                                if (list_err_ != ListErrors::NONE)                          \
+                                    return list_err_;                                       \
+                            } while(0)
+
+ListErrors ListVerify(list_t* list)
+{
+    assert(list);
+
+    if (list->size > list->capacity)            return ListErrors::INVALID_SIZE;
+    if (list->data[0] != POISON)                return ListErrors::DAMAGED_FICTIVE;
+
+    return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
                                         size_t* inserted_pos, ErrorInfo* error)
 {
     assert(list);
+
+    CHECK_LIST(list);
+
+    if (list->size == list->capacity)
+    {
+        MakeListLonger(list, error);
+        RETURN_IF_LISTERROR((ListErrors) error->code);
+    }
 
     int free_pos  = GetFreeElemFromList(list, pos);
     *inserted_pos = free_pos;
@@ -149,7 +199,7 @@ ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
         list->prev[list->next[free_pos]] = free_pos;
     else
     {
-        list->tail                   = free_pos;
+        list->tail                   = free_pos;        // mb delete tail??
         list->prev[FICTIVE_ELEM_POS] = list->tail;
     }
 
@@ -157,13 +207,103 @@ ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
         list->next[list->prev[free_pos]] = free_pos;
     else
     {
-        list->head                   = free_pos;
+        list->head                   = free_pos;        // mb delete head??
         list->next[FICTIVE_ELEM_POS] = list->head;
     }
 
     list->size++;
 
     return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static ListErrors MakeListLonger(list_t* list, ErrorInfo* error)
+{
+    assert(list);
+    assert(error);
+
+    int new_capacity = list->capacity * CPTY_MULTIPLIER;
+
+    ReallocDataArray(new_capacity, list, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    ReallocNextArray(new_capacity, list, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    ReallocPrevArray(new_capacity, list, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    list->capacity = new_capacity;
+
+    return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static int* ReallocDataArray(const size_t new_capacity, list_t* list, ErrorInfo* error)
+{
+    assert(error);
+
+    int* temp_data = (int*) realloc(list->data, new_capacity);
+    if (temp_data == nullptr)
+    {
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "DATA ARRAY";
+        return nullptr;
+    }
+
+    for (size_t i = list->capacity; i < new_capacity; i++)
+        temp_data[i] = POISON;
+
+    list->data = temp_data;
+
+    return temp_data;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo* error)
+{
+    assert(error);
+
+    int* temp_next = (int*) realloc(list->next, new_capacity);
+    if (temp_next == nullptr)
+    {
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "NEXT ARRAY";
+        return nullptr;
+    }
+
+    //                                               v-- we dont need to fill last element
+    for (size_t i = list->capacity; i < new_capacity - 1; i++)
+        temp_next[i] = CHANGE_SIGN * (i + 1);
+
+    list->next = temp_next;
+
+    return temp_next;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo* error)
+{
+    assert(error);
+
+    int* temp_prev = (int*) realloc(list->prev, new_capacity);
+    if (temp_prev == nullptr)
+    {
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "PREV ARRAY";
+        return nullptr;
+    }
+
+    for (size_t i = list->capacity; i < new_capacity; i++)
+        temp_prev[i] = -1;
+
+    list->prev = temp_prev;
+
+    return temp_prev;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -271,16 +411,16 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
     PrintLog("%9s", "");
     for (size_t i = 0; i < capacity; i++)
         PrintLog(" %3d  ", i);
-    PrintLog("\n");
+    PrintLog("<br>\n");
 
     LogPrintArray(list->data, capacity, "DATA");
     LogPrintArray(list->next, capacity, "NEXT");
     LogPrintArray(list->prev, capacity, "PREV");
 
-    PrintLog("HEAD     > %d\n"
-             "TAIL     > %d\n"
-             "FREE     > %d\n"
-             "CAPACITY > %d\n", list->head, list->tail, list->free, list->capacity);
+    PrintLog("HEAD     > %d<br>\n"
+             "TAIL     > %d<br>\n"
+             "FREE     > %d<br>\n"
+             "CAPACITY > %d<br>\n", list->head, list->tail, list->free, list->capacity);
 
     DrawListGraph(list);
 
@@ -306,7 +446,7 @@ static inline void LogPrintArray(const int* array, size_t size, const char* name
             PrintLog("[NaN] ");
     }
 
-    PrintLog("\n");
+    PrintLog("<br>\n");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -328,17 +468,17 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
             return (int) error->code;
 
         case (ListErrors::EMPTY_LIST):
-            fprintf(fp, "CAN NOT REMOVE ELEMENT FROM EMPTY LIST\n");
+            fprintf(fp, "CAN NOT REMOVE ELEMENT FROM EMPTY LIST<br>\n");
             LOG_END();
             return (int) error->code;
 
         case (ListErrors::ALLOCATE_MEMORY):
-            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM LIST\n", (char*) error->data);
+            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM LIST<br>\n", (char*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (ListErrors::EMPTY_ELEMENT):
-            fprintf(fp, "CAN NOT REMOVE ALREADY EMPTY ELEMENT\n");
+            fprintf(fp, "CAN NOT REMOVE ALREADY EMPTY ELEMENT<br>\n");
             DUMP_LIST((list_t*) error->data);
             LOG_END();
             return (int) error->code;
@@ -346,7 +486,7 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
         case (ListErrors::UNKNOWN):
         // fall through
         default:
-            fprintf(fp, "UNKNOWN ERROR WITH LIST\n");
+            fprintf(fp, "UNKNOWN ERROR WITH LIST<br>\n");
             LOG_END();
             return (int) ListErrors::UNKNOWN;
     }
@@ -360,18 +500,66 @@ static void DrawListGraph(list_t* list)
 
     FILE* dotf = fopen(DOT_FILE, "w");
 
+    StartGraph(dotf, list);
+
+    DrawListInfo(dotf, list);
+    DrawListElements(dotf, list);
+    CenterListElements(dotf, list);
+    DrawListArrows(dotf, list);
+
+    EndGraph(dotf, list);
+
+    fclose(dotf);
+
+    char img_name[MAX_FILE_NAME_LEN] = {};
+    snprintf(img_name, MAX_FILE_NAME_LEN, "img/img%d_%d.png", IMG_CNT++, clock());
+
+    char dot_command[MAX_DOT_CMD_LEN] = {};
+    snprintf(dot_command, MAX_DOT_CMD_LEN, "dot %s -T png -o %s", DOT_FILE, img_name);
+
+    system(dot_command);
+
+    PrintLog("<img src=\"%s\">", img_name);
+}
+
+//:::::::::::::::::::::::::::::::::::::
+
+static inline void EndGraph(FILE* dotf, const list_t* list)
+{
+    assert(list);
+
+    fprintf(dotf, "}");
+}
+
+//:::::::::::::::::::::::::::::::::::::
+
+static inline void StartGraph(FILE* dotf, const list_t* list)
+{
+    assert(list);
+
     fprintf(dotf, "digraph structs {\n"
 	              "rankdir=LR;\n"
 	              "node[color=\"black\",fontsize=14];\n"
 	              "edge[color=\"darkblue\",fontcolor=\"yellow\",fontsize=12];\n");
+}
 
-    fprintf(dotf,   "head [shape=signature, label=\"HEAD\", fillcolor=\"yellow\", style=filled ];\n"
-	                "tail [shape=signature, label=\"TAIL\", fillcolor=\"yellow\", style=filled ];\n"
-	                "free [shape=signature, label=\"FREE\", fillcolor=\"yellow\", style=filled ];\n"
-                    "head->%d[color = \"black\"];\n"
-	                "tail->%d[color = \"black\"];\n"
-	                "free->%d[color = \"black\"];\n",
-                    list->head, list->tail, list->free);
+//:::::::::::::::::::::::::::::::::::::
+
+static inline void DrawListInfo(FILE* dotf, const list_t* list)
+{
+    assert(list);
+
+    fprintf(dotf, "info [shape=record, style=filled, fillcolor=\"yellow\","
+                  "label=\"HEAD: %d | TAIL: %d | FREE: %d | SIZE: %d | CAPACITY: %d\","
+                  "fontcolor = \"black\", fontsize = 25];\n",
+                              list->head, list->tail, list->free, list->size, list->capacity);
+}
+
+//:::::::::::::::::::::::::::::::::::::
+
+static inline void DrawListElements(FILE* dotf, const list_t* list)
+{
+    assert(list);
 
     for (int i = 0; i < list->capacity; i++)
     {
@@ -383,17 +571,33 @@ static void DrawListGraph(list_t* list)
         else
             fprintf(dotf, "fillcolor=\"lightblue\", color = darkblue,");
 
+        fprintf(dotf, " label=\" ");
+
+        if (i == list->free)
+            fprintf(dotf, "FREE | ");
+        else if (i == list->head)
+            fprintf(dotf, "HEAD | ");
+        else if (i == list->tail)
+            fprintf(dotf, "TAIL | ");
+
         if (list->data[i] == POISON)
         {
-            fprintf(dotf, " label=\" ip: %d | data: NaN| <n%d> next: %d| <p%d> prev: %d\" ];\n",
-                            i, i, list->next[i], i, list->prev[i]);
+            fprintf(dotf, "ip: %d | data: NaN| next: %d| prev: %d\" ];\n",
+                            i, list->next[i], list->prev[i]);
         }
         else
         {
-            fprintf(dotf, " label=\" ip: %d | data: %d| <n%d> next: %d| <p%d> prev: %d\" ];\n",
-                            i, list->data[i], i, list->next[i], i, list->prev[i]);
+            fprintf(dotf, "ip: %d | data: %d| next: %d| prev: %d\" ];\n",
+                            i, list->data[i], list->next[i], list->prev[i]);
         }
     }
+}
+
+//:::::::::::::::::::::::::::::::::::::
+
+static inline void CenterListElements(FILE* dotf, const list_t* list)
+{
+    assert(list);
 
     fprintf(dotf, "0");
     for (int i = 1; i < list->capacity; i++)
@@ -401,6 +605,13 @@ static void DrawListGraph(list_t* list)
         fprintf(dotf, "->%d", i);
     }
     fprintf(dotf, "[weight = 993, color = \"white\"];\n");
+}
+
+//:::::::::::::::::::::::::::::::::::::
+
+static inline void DrawListArrows(FILE* dotf, const list_t* list)
+{
+    assert(list);
 
     for (int i = 0; i < list->capacity; i++)
     {
@@ -413,8 +624,4 @@ static void DrawListGraph(list_t* list)
 
         fprintf(dotf, "%d -> %d [color = \"green\"];\n", i, next);
     }
-
-    fprintf(dotf, "}");
-
-    fclose(dotf);
 }

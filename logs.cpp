@@ -8,7 +8,7 @@
 
 static FILE* __LOG_STREAM__ = stderr;
 
-static const char* EXTENSION = ".log";
+static const char* EXTENSION = ".log.html";
 
 void OpenLogFile(const char* FILE_NAME)
 {
@@ -22,22 +22,22 @@ void OpenLogFile(const char* FILE_NAME)
     time_t now = 0;
     time(&now);
 
-    fprintf(__LOG_STREAM__, "\n*********************************************************************\n"
-                              "=========================== PROGRAM START ===========================\n"
-                              "*********************************************************************\n"
-                              "RUNNED AT %s\n", ctime(&now));
+    fprintf(__LOG_STREAM__, "<br>\n*********************************************************************<br>\n"
+                              "=========================== PROGRAM START ===========================<br>\n"
+                              "*********************************************************************<br>\n"
+                              "RUNNED AT %s<br>\n", ctime(&now));
 
     #pragma GCC diagnostic ignored "-Wundef"
     #if CANARY_PROTECT
-        fprintf(__LOG_STREAM__, "[CANARY PROTECT ON]\n");
+        fprintf(__LOG_STREAM__, "[CANARY PROTECT ON]<br>\n");
     #endif
 
     #if HASH_PROTECT
-        fprintf(__LOG_STREAM__, "[HASH PROTECT ON]\n");
+        fprintf(__LOG_STREAM__, "[HASH PROTECT ON]<br>\n");
     #endif
     #pragma GCC diagnostic warning "-Wundef"
 
-    fputc('\n', __LOG_STREAM__);
+    fprintf(__LOG_STREAM__, "<br>\n");
 
     atexit(CloseLogFile);
     free(file_name);
@@ -47,9 +47,9 @@ void OpenLogFile(const char* FILE_NAME)
 
 void CloseLogFile()
 {
-    fprintf(__LOG_STREAM__, "*********************************************************************\n"
-                            "============================ PROGRAM END ============================\n"
-                            "*********************************************************************\n");
+    fprintf(__LOG_STREAM__, "*********************************************************************<br>\n"
+                            "============================ PROGRAM END ============================<br>\n"
+                            "*********************************************************************<br>\n");
     fclose(__LOG_STREAM__);
 }
 

@@ -21,38 +21,38 @@ int PrintError(FILE* fp, const void* err, const char* func, const char* file, co
             return (int) error->code;
 
         case (ERRORS::OPEN_FILE):
-            fprintf(fp, "OPEN FILE ERROR\n"
-                        "FAILED TO OPEN FILE \"%s\"\n", (char*) error->data);
+            fprintf(fp, "OPEN FILE ERROR<br>\n"
+                        "FAILED TO OPEN FILE \"%s\"<br>\n", (char*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (ERRORS::READ_FILE):
-            fprintf(fp, "READ FILE ERROR\n"
-                        "FAILED TO READ INFO FROM FILE \"%s\"\n", (char*) error->data);
+            fprintf(fp, "READ FILE ERROR<br>\n"
+                        "FAILED TO READ INFO FROM FILE \"%s\"<br>\n", (char*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (ERRORS::ALLOCATE_MEMORY):
-            fprintf(fp, "MEMORY ALLOCATE ERROR\n"
-                        "FAILED TO ALLOCATE MEMORY IN \"%s\"\n", (char*) error->data);
+            fprintf(fp, "MEMORY ALLOCATE ERROR<br>\n"
+                        "FAILED TO ALLOCATE MEMORY IN \"%s\"<br>\n", (char*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (ERRORS::PRINT_DATA):
-            fprintf(fp, "DATA PRINT ERROR\n"
-                        "FAILED TO PRINT DATA IN \"%s\"\n", (char*) error->data);
+            fprintf(fp, "DATA PRINT ERROR<br>\n"
+                        "FAILED TO PRINT DATA IN \"%s\"<br>\n", (char*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (ERRORS::USER_QUIT):
-            fprintf(fp, "USER DECIDED TO QUIT\n");
+            fprintf(fp, "USER DECIDED TO QUIT<br>\n");
             LOG_END();
             return (int) error->code;
 
         case (ERRORS::UNKNOWN):
         // fall through
         default:
-            fprintf(fp, "UNKNOWN ERROR\n");
+            fprintf(fp, "UNKNOWN ERROR<br>\n");
             LOG_END();
             return (int) ERRORS::UNKNOWN;
     }

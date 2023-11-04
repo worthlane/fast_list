@@ -51,8 +51,8 @@ int PrintLog (const char *format, ...);
 #define LOG_START(func, file, line)         do                                                              \
                                             {                                                               \
                                                     PrintLog(                                               \
-                                                    "--------------------LOGS CALLED--------------------\n" \
-                                                    "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)\n",           \
+                                                    "--------------------LOGS CALLED--------------------<br>\n" \
+                                                    "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)<br>\n",           \
                                                     func, file, line);                                      \
                                             } while (0)
 
@@ -63,8 +63,8 @@ int PrintLog (const char *format, ...);
 #endif
 #define LOG_END()           do                                                                      \
                             {                                                                       \
-                                PrintLog("END TIME: %s\n"                                           \
-                                        "--------------------------------------------------\n",     \
+                                PrintLog("END TIME: %s<br>\n"                                           \
+                                        "--------------------------------------------------<br>\n",     \
                                         __TIME__);                                                  \
                             } while(0)
 
@@ -72,7 +72,7 @@ int PrintLog (const char *format, ...);
 #undef LOG_SEPARATOR
 
 #endif
-#define LOG_SEPARATOR()     PrintLog("\n........................................\n\n");
+#define LOG_SEPARATOR()     PrintLog("<br>\n........................................<br>\n<br>\n");
 
 #ifdef LOG_START_DUMP
 #undef LOG_START_DUMP
@@ -81,8 +81,8 @@ int PrintLog (const char *format, ...);
 #define LOG_START_DUMP(func, file, line)     do                                                             \
                                             {                                                               \
                                                     PrintLog(                                               \
-                                                    "--------------------DUMP CALLED--------------------\n" \
-                                                    "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)\n",           \
+                                                    "--------------------DUMP CALLED--------------------<br>\n" \
+                                                    "RUNNING FUNCTION %s FROM FILE \"%s\"(%d)<br>\n",           \
                                                     func, file, line);                                      \
                                             } while (0)
 
