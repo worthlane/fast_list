@@ -82,17 +82,15 @@ void PtrListDtor(ptrlist_t* list)
 {
     assert(list);
 
-    PtrListElem* elem = list->fictive;
-    size_t elem_amt   = list->size + 1;
+    PtrListElem* elem     = list->fictive;
+    size_t       elem_amt = list->size + 1;
     // fictive --------------------^
 
     while (elem_amt--)
     {
-        PtrListElem* next_elem = elem->next;
-
         DestructListElement(elem);
 
-        elem = next_elem;
+        elem = elem->next;
     }
 
     list->fictive = nullptr;
