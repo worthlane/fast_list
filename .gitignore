@@ -3,3 +3,4 @@ build
 list
 *.log
 img
+*.dot

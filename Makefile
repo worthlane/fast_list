@@ -16,7 +16,7 @@ CXXFLAGS =  -D _DEBUG -ggdb3 -std=c++17 -O0 -Wall -Wextra -Weffc++ -Waggressive-
 IMAGE = img
 BUILD_DIR = build/bin
 OBJECTS_DIR = build
-SOURCES = main.cpp logs.cpp fast_list.cpp errors.cpp
+SOURCES = main.cpp logs.cpp fast_list.cpp errors.cpp ptr_list.cpp graphs.cpp
 OBJECTS = $(SOURCES:%.cpp=$(OBJECTS_DIR)/%.o)
 DOXYFILE = Doxyfile
 DOXYBUILD = doxygen $(DOXYFILE)
@@ -36,7 +36,7 @@ doxybuild:
 	$(DOXYBUILD)
 
 clean:
-	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png
+	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png *.dot
 
 makedirs:
 	mkdir -p $(BUILD_DIR)

@@ -2,32 +2,34 @@
 
 #include "logs.h"
 #include "fast_list.h"
+#include "ptr_list.h"
 #include "errors.h"
 
 int main(const int argc, const char* argv[])
 {
     OpenLogFile(argv[0]);
 
-    list_t list = {};
+    ptrlist_t list = {};
 
     ErrorInfo error = {};
 
-    ListCtor(&list, &error);
+    PtrListCtor(&list, &error);
 
-    DUMP_LIST(&list);
+    DUMP_PTRLIST(&list);
 
-    size_t a = 0;
-    size_t b = 0;
+    PtrListElem* last = nullptr;
 
-    ListInsertAfterElem(&list, 0, 23, &a, &error);
-    ListInsertAfterElem(&list, a, 28, &b, &error);
-    ListInsertAfterElem(&list, a, 29, &b, &error);
+    PtrListInsertAfterElem(&list, list.fictive, 23, &last, &error);
+    PtrListInsertAfterElem(&list, last, 28, &last, &error);
+    PtrListInsertAfterElem(&list, last, 29, &last, &error);
 
-    ListRemoveElem(&list, 1, &error);
+    DUMP_PTRLIST(&list);
 
-    DUMP_LIST(&list);
+    PtrListRemoveElem(&list, last, &error);
 
-    ListRemoveElem(&list, 2, &error);
+    DUMP_PTRLIST(&list);
+
+    /*ListRemoveElem(&list, 2, &error);
 
     DUMP_LIST(&list);
 
@@ -40,7 +42,7 @@ int main(const int argc, const char* argv[])
     ListInsertAfterElem(&list, a, 28, &b, &error);
     ListInsertAfterElem(&list, a, 29, &b, &error);
 
-    DUMP_LIST(&list);
+    DUMP_LIST(&list);*/
 
     return 0;
 }

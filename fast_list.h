@@ -63,7 +63,7 @@ ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
                                              size_t* inserted_pos, ErrorInfo* error);
 ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error);
 int        ListDump(FILE* fp, const void* list, const char* func, const char* file, const int line);
-ListErrors ListVerify(list_t* list);
+ListErrors ListVerify(const list_t* list);
 
 int PrintListError(FILE* fp, const void* err, const char* func, const char* file, const int line);
 

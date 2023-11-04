@@ -2,12 +2,12 @@
 #include <time.h>
 
 #include "fast_list.h"
+#include "graphs.h"
 
 static const int    POISON           = -2147483647;
 static const int    CHANGE_SIGN      = -1;
 static const size_t FICTIVE_ELEM_POS =  0;
 static const int    CPTY_MULTIPLIER  =  2;
-static const size_t MAX_DOT_CMD_LEN  =  200;
 
 static int* InitDataArray(const size_t capacity, ErrorInfo* error);
 static int* InitNextArray(const size_t capacity, ErrorInfo* error);
@@ -32,20 +32,12 @@ static inline int GetListTail(const list_t* list);
 
 // ========= GRAPHS ==========
 
-static const char* DOT_FILE = "list.dot";
-
 static void DrawListGraph(list_t* list);
-
-static inline void StartGraph(FILE* dotf, const list_t* list);
 
 static inline void DrawListInfo(FILE* dotf, const list_t* list);
 static inline void DrawListElements(FILE* dotf, const list_t* list);
 static inline void CenterListElements(FILE* dotf, const list_t* list);
 static inline void DrawListArrows(FILE* dotf, const list_t* list);
-
-static inline void EndGraph(FILE* dotf, const list_t* list);
-
-static size_t IMG_CNT = 1;
 
 // ===========================
 
@@ -178,7 +170,7 @@ void ListDtor(list_t* list)
                                     return list_err_;                                       \
                             } while(0)
 
-ListErrors ListVerify(list_t* list)
+ListErrors ListVerify(const list_t* list)
 {
     assert(list);
 
@@ -336,8 +328,6 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
 {
     assert(list);
 
-    // add realloc
-
     CheckRemovingElement(list, pos, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
@@ -487,47 +477,18 @@ static void DrawListGraph(list_t* list)
 
     FILE* dotf = fopen(DOT_FILE, "w");
 
-    StartGraph(dotf, list);
+    StartGraph(dotf);
 
     DrawListInfo(dotf, list);
     DrawListElements(dotf, list);
     CenterListElements(dotf, list);
     DrawListArrows(dotf, list);
 
-    EndGraph(dotf, list);
+    EndGraph(dotf);
 
     fclose(dotf);
 
-    char img_name[MAX_FILE_NAME_LEN] = {};
-    snprintf(img_name, MAX_FILE_NAME_LEN, "img/img%d_%d.png", IMG_CNT++, clock());
-
-    char dot_command[MAX_DOT_CMD_LEN] = {};
-    snprintf(dot_command, MAX_DOT_CMD_LEN, "dot %s -T png -o %s", DOT_FILE, img_name);
-
-    system(dot_command);
-
-    PrintLog("<img src=\"%s\">", img_name);
-}
-
-//:::::::::::::::::::::::::::::::::::::
-
-static inline void EndGraph(FILE* dotf, const list_t* list)
-{
-    assert(list);
-
-    fprintf(dotf, "}");
-}
-
-//:::::::::::::::::::::::::::::::::::::
-
-static inline void StartGraph(FILE* dotf, const list_t* list)
-{
-    assert(list);
-
-    fprintf(dotf, "digraph structs {\n"
-	              "rankdir=LR;\n"
-	              "node[color=\"black\",fontsize=14];\n"
-	              "edge[color=\"darkblue\",fontcolor=\"yellow\",fontsize=12];\n");
+    MakeImg(DOT_FILE);
 }
 
 //:::::::::::::::::::::::::::::::::::::
