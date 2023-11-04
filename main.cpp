@@ -23,8 +23,6 @@ int main(const int argc, const char* argv[])
     ListInsertAfterElem(&list, a, 28, &b, &error);
     ListInsertAfterElem(&list, a, 29, &b, &error);
 
-    DUMP_LIST(&list);
-
     ListRemoveElem(&list, 1, &error);
 
     DUMP_LIST(&list);

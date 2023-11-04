@@ -2,6 +2,7 @@ digraph structs {
 rankdir=LR;
 node[color="black",fontsize=14];
 edge[color="darkblue",fontcolor="yellow",fontsize=12];
+info [shape=record, style=filled, fillcolor="yellow",label="HEAD: 3 | TAIL: 2 | FREE: 4 | SIZE: 3 | CAPACITY: 16",fontcolor = "black", fontsize = 25];
 0 [shape=Mrecord, style=filled, fillcolor="lightgray", color = black, label=" ip: 0 | data: NaN| next: 3| prev: 2" ];
 1 [shape=Mrecord, style=filled, fillcolor="lightblue", color = darkblue, label=" ip: 1 | data: 29| next: 2| prev: 3" ];
 2 [shape=Mrecord, style=filled, fillcolor="lightblue", color = darkblue, label=" TAIL | ip: 2 | data: 28| next: 0| prev: 1" ];

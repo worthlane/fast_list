@@ -9,8 +9,6 @@ struct List
     int* next;
     int* prev;
 
-    int head;
-    int tail;
     int free;
 
     size_t capacity;

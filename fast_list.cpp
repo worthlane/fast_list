@@ -27,6 +27,9 @@ static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo*
 
 static inline void LogPrintArray(const int* array, size_t size, const char* name);
 
+static inline int GetListHead(const list_t* list);
+static inline int GetListTail(const list_t* list);
+
 // ========= GRAPHS ==========
 
 static const char* DOT_FILE = "list.dot";
@@ -63,8 +66,6 @@ ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity)
     list->next     = next;
     list->prev     = prev;
 
-    list->head     = 0;
-    list->tail     = 0;
     list->free     = 1;
 
     list->capacity = capacity;
@@ -91,6 +92,20 @@ static int* InitDataArray(const size_t capacity, ErrorInfo* error)
         data[i] = POISON;
 
     return data;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline int GetListHead(const list_t* list)
+{
+    return list->next[FICTIVE_ELEM_POS];
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline int GetListTail(const list_t* list)
+{
+    return list->prev[FICTIVE_ELEM_POS];
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -144,8 +159,6 @@ void ListDtor(list_t* list)
     free(list->next);
     free(list->prev);
 
-    list->head     = POISON;
-    list->tail     = POISON;
     list->free     = POISON;
 
     list->capacity = 0;
@@ -195,21 +208,8 @@ ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
 
     InitListElem(list, free_pos, value, pos, list->next[pos]);
 
-    if (pos != list->tail)
-        list->prev[list->next[free_pos]] = free_pos;
-    else
-    {
-        list->tail                   = free_pos;        // mb delete tail??
-        list->prev[FICTIVE_ELEM_POS] = list->tail;
-    }
-
-    if (list->prev[free_pos] != 0)
-        list->next[list->prev[free_pos]] = free_pos;
-    else
-    {
-        list->head                   = free_pos;        // mb delete head??
-        list->next[FICTIVE_ELEM_POS] = list->head;
-    }
+    list->prev[list->next[free_pos]] = free_pos;
+    list->next[list->prev[free_pos]] = free_pos;
 
     list->size++;
 
@@ -341,21 +341,8 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
     CheckRemovingElement(list, pos, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    if (list->tail != pos)
-        list->next[list->prev[pos]] = list->next[pos];
-    else
-    {
-        list->tail = list->prev[pos];
-        list->next[list->tail] = 0;
-    }
-
-    if (list->head != pos)
-        list->prev[list->next[pos]] = list->prev[pos];
-    else
-    {
-        list->head = list->next[pos];
-        list->prev[list->head] = 0;
-    }
+    list->next[list->prev[pos]] = list->next[pos];
+    list->prev[list->next[pos]] = list->prev[pos];
 
     AddFreeElemInList(list, pos);
     list->size--;
@@ -367,7 +354,7 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
 
 static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo* error)
 {
-    if (list->tail == 0)
+    if (list->size == 0)
     {
         error->code = (int) ListErrors::EMPTY_LIST;
         return;
@@ -420,7 +407,7 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
     PrintLog("HEAD     > %d<br>\n"
              "TAIL     > %d<br>\n"
              "FREE     > %d<br>\n"
-             "CAPACITY > %d<br>\n", list->head, list->tail, list->free, list->capacity);
+             "CAPACITY > %d<br>\n", GetListHead(list), GetListTail(list), list->free, list->capacity);
 
     DrawListGraph(list);
 
@@ -552,7 +539,7 @@ static inline void DrawListInfo(FILE* dotf, const list_t* list)
     fprintf(dotf, "info [shape=record, style=filled, fillcolor=\"yellow\","
                   "label=\"HEAD: %d | TAIL: %d | FREE: %d | SIZE: %d | CAPACITY: %d\","
                   "fontcolor = \"black\", fontsize = 25];\n",
-                              list->head, list->tail, list->free, list->size, list->capacity);
+                              GetListHead(list), GetListTail(list), list->free, list->size, list->capacity);
 }
 
 //:::::::::::::::::::::::::::::::::::::
@@ -575,9 +562,11 @@ static inline void DrawListElements(FILE* dotf, const list_t* list)
 
         if (i == list->free)
             fprintf(dotf, "FREE | ");
-        else if (i == list->head)
+
+        if (i == GetListHead(list))
             fprintf(dotf, "HEAD | ");
-        else if (i == list->tail)
+
+        if (i == GetListTail(list))
             fprintf(dotf, "TAIL | ");
 
         if (list->data[i] == POISON)
