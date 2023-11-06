@@ -28,10 +28,10 @@ void StartGraph(FILE* dotf)
 void MakeImg(const char* dot_file)
 {
     char img_name[MAX_IMG_FILE_LEN] = {};
-    snprintf(img_name, MAX_IMG_FILE_LEN, "img/img%d_%d.png", IMG_CNT++, clock());
+    snprintf(img_name, MAX_IMG_FILE_LEN, "img/img%lu_%lu.png", IMG_CNT++, clock());
 
     char dot_command[MAX_DOT_CMD_LEN] = {};
-    snprintf(dot_command, MAX_DOT_CMD_LEN, "dot %s -T png -o %s", DOT_FILE, img_name);
+    snprintf(dot_command, MAX_DOT_CMD_LEN, "dot %s -T png -o %s", dot_file, img_name);
     system(dot_command);
 
     PrintLog("<img src=\"%s\"><br>", img_name);

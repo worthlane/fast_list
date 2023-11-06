@@ -3,7 +3,6 @@
 
 #include <stdio.h>
 
-static const char*  DOT_FILE         = "tmp.dot";
 static const size_t MAX_DOT_CMD_LEN  = 200;
 static const size_t MAX_IMG_FILE_LEN = 100;
 

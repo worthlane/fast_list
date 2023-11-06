@@ -9,25 +9,60 @@ int main(const int argc, const char* argv[])
 {
     OpenLogFile(argv[0]);
 
-    ptrlist_t list = {};
+    list_t list = {};
 
     ErrorInfo error = {};
 
-    PtrListCtor(&list, &error);
+    ListCtor(&list, &error);
 
-    DUMP_PTRLIST(&list);
+    DUMP_LIST(&list);
 
-    PtrListElem* last = nullptr;
+    size_t a = 0;
+    size_t b = 0;
 
-    PtrListInsertAfterElem(&list, list.fictive, 23, &last, &error);
-    PtrListInsertAfterElem(&list, last, 28, &last, &error);
-    PtrListInsertAfterElem(&list, last, 29, &last, &error);
+    ListInsertAfterElem(&list, 0, 23, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 29, &b, &error);
+    ListInsertAfterElem(&list, a, 29, &a, &error);
+    ListInsertAfterElem(&list, a, 29, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &b, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
 
-    DUMP_PTRLIST(&list);
+    DUMP_LIST(&list);
 
-    PtrListRemoveElem(&list, last, &error);
+    ListInsertAfterElem(&list, a, 228, &a, &error);
+    ListInsertAfterElem(&list, a, 228, &a, &error);
+    ListInsertAfterElem(&list, a, 228, &a, &error);
 
-    DUMP_PTRLIST(&list);
+    DUMP_LIST(&list);
+
+    ListRemoveElem(&list, 10, &error);
+    ListRemoveElem(&list, 7, &error);
+    ListRemoveElem(&list, 11, &error);
+    ListRemoveElem(&list, 2, &error);
+    ListRemoveElem(&list, 1, &error);
+    ListRemoveElem(&list, 6, &error);
+    ListRemoveElem(&list, 18, &error);
+    ListRemoveElem(&list, 15, &error);
+    ListRemoveElem(&list, 14, &error);
+
+    DUMP_LIST(&list);
+
+    ListRemoveElem(&list, 8, &error);
+
+    DUMP_LIST(&list);
+
+    ListRemoveElem(&list, 4, &error);
+
+    DUMP_LIST(&list);
 
     /*ListRemoveElem(&list, 2, &error);
 

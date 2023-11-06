@@ -12,7 +12,6 @@ int PrintError(FILE* fp, const void* err, const char* func, const char* file, co
 
     #pragma GCC diagnostic ignored "-Wcast-qual"
     struct ErrorInfo* error = (struct ErrorInfo*) err;
-    #pragma GCC diagnostic warning "-Wcast-qual"
 
     switch ((ERRORS) error->code)
     {
@@ -56,4 +55,6 @@ int PrintError(FILE* fp, const void* err, const char* func, const char* file, co
             LOG_END();
             return (int) ERRORS::UNKNOWN;
     }
+
+    #pragma GCC diagnostic warning "-Wcast-qual"
 }

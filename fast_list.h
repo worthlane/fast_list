@@ -55,7 +55,7 @@ enum class ListErrors
 
 typedef struct List list_t;
 
-static const size_t DEFAULT_LIST_CAPACITY = 16;
+static const size_t DEFAULT_LIST_CAPACITY = 4;
 
 ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity = DEFAULT_LIST_CAPACITY);
 void       ListDtor(list_t* list);

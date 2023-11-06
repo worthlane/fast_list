@@ -4,6 +4,7 @@
 #include "fast_list.h"
 #include "graphs.h"
 
+static const char*  DOT_FILE         = "tmp.dot";
 static const int    POISON           = -2147483647;
 static const int    CHANGE_SIGN      = -1;
 static const size_t FICTIVE_ELEM_POS =  0;
@@ -16,19 +17,46 @@ static inline void InitListElem(list_t* list, const size_t pos, const int value,
                                               const size_t prev_pos, const size_t next_pos);
 
 static inline void   AddFreeElemInList(list_t* list, const size_t pos);
-static inline size_t GetFreeElemFromList(list_t* list, const size_t pos);
+static inline size_t GetFreeElemFromList(list_t* list);
 
 static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo* error);
 
+static inline int GetListHead(const list_t* list);
+static inline int GetListTail(const list_t* list);
+
+static inline void FreeListArrays(list_t* list);
+
+// ================== REALLOC FUNCS ===================
+
 static ListErrors MakeListLonger(list_t* list, ErrorInfo* error);
+static ListErrors MakeListShorter(list_t* list, ErrorInfo* error);
+
+static int GetShorterCapacity(const size_t old_capacity);
+
+static void FillShorterList(const list_t* old_list, int* new_data, int* new_next, int* new_prev);
+
+static inline void InitFictiveInSortedList(int* new_data, int* new_next, int* new_prev, const size_t size);
+static inline void InitMiddleElemsInSortedList(const list_t* old_list,
+                                               int* new_data, int* new_next, int* new_prev,
+                                               const size_t size, size_t* curr_pos);
+static inline void InitTailInSortedList(int* new_data, int* new_next, int* new_prev,
+                                        const size_t size, const int value);
+
 static int* ReallocDataArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
 static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
 static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
 
-static inline void LogPrintArray(const int* array, size_t size, const char* name);
+// =====================================================
 
-static inline int GetListHead(const list_t* list);
-static inline int GetListTail(const list_t* list);
+// ========= TEXT DUMP =======
+
+static void TextListDump(FILE* fp, const list_t* list);
+
+static inline void PrintListInfo(FILE* fp, const list_t* list);
+static inline void PrintListElements(FILE* fp, const list_t* list);
+static inline void ChooseElementHtmlColor(FILE* fp, const list_t* list, const size_t pos);
+
+// ===========================
 
 // ========= GRAPHS ==========
 
@@ -38,6 +66,8 @@ static inline void DrawListInfo(FILE* dotf, const list_t* list);
 static inline void DrawListElements(FILE* dotf, const list_t* list);
 static inline void CenterListElements(FILE* dotf, const list_t* list);
 static inline void DrawListArrows(FILE* dotf, const list_t* list);
+static inline void ChooseVertexColor(FILE* dotf, const list_t* list, const size_t pos);
+static inline void MarkImportantElements(FILE* dotf, const list_t* list, const size_t pos);
 
 // ===========================
 
@@ -114,8 +144,8 @@ static int* InitNextArray(const size_t capacity, ErrorInfo* error)
         return nullptr;
     }
 
-    //                              v-- we dont need to fill last element
-    for (size_t i = 1; i < capacity - 1; i++)
+    //                           v-- we dont need to fill last element
+    for (int i = 1; i < capacity - 1; i++)
         next[i] = CHANGE_SIGN * (i + 1);
 
     return next;
@@ -135,7 +165,7 @@ static int* InitPrevArray(const size_t capacity, ErrorInfo* error)
         return nullptr;
     }
 
-    for (size_t i = 1; i < capacity; i++)
+    for (int i = 1; i < capacity; i++)
         prev[i] = -1;
 
     return prev;
@@ -147,14 +177,23 @@ void ListDtor(list_t* list)
 {
     assert(list);
 
-    free(list->data);
-    free(list->next);
-    free(list->prev);
+    FreeListArrays(list);
 
     list->free     = POISON;
 
     list->capacity = 0;
     list->size     = 0;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline void FreeListArrays(list_t* list)
+{
+    assert(list);
+
+    free(list->data);
+    free(list->next);
+    free(list->prev);
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -183,22 +222,52 @@ ListErrors ListVerify(const list_t* list)
 //-----------------------------------------------------------------------------------------------------
 
 ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
-                                        size_t* inserted_pos, ErrorInfo* error)
+                                             size_t* inserted_pos, ErrorInfo* error)
 {
     assert(list);
+    assert(error);
 
     CHECK_LIST(list);
 
-    if (list->size == list->capacity)
+    if (list->free == FICTIVE_ELEM_POS)
     {
         MakeListLonger(list, error);
         RETURN_IF_LISTERROR((ListErrors) error->code);
     }
 
-    int free_pos  = GetFreeElemFromList(list, pos);
-    *inserted_pos = free_pos;
+    size_t free_pos = GetFreeElemFromList(list);
+    *inserted_pos   = free_pos;
 
     InitListElem(list, free_pos, value, pos, list->next[pos]);
+
+    list->prev[list->next[free_pos]] = free_pos;
+    list->next[list->prev[free_pos]] = free_pos;
+
+    list->size++;
+
+    return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+ListErrors ListInsertBeforeElem(list_t* list, const size_t pos, const int value,
+                                              size_t* inserted_pos, ErrorInfo* error)
+{
+    assert(list);
+    assert(error);
+
+    CHECK_LIST(list);
+
+    if (list->free == FICTIVE_ELEM_POS)
+    {
+        MakeListLonger(list, error);
+        RETURN_IF_LISTERROR((ListErrors) error->code);
+    }
+
+    size_t free_pos = GetFreeElemFromList(list);
+    *inserted_pos   = free_pos;
+
+    InitListElem(list, free_pos, value, list->prev[pos], pos);
 
     list->prev[list->next[free_pos]] = free_pos;
     list->next[list->prev[free_pos]] = free_pos;
@@ -226,9 +295,129 @@ static ListErrors MakeListLonger(list_t* list, ErrorInfo* error)
     ReallocPrevArray(new_capacity, list, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
+    list->free     = list->capacity;
     list->capacity = new_capacity;
 
     return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static ListErrors MakeListShorter(list_t* list, ErrorInfo* error)
+{
+    assert(list);
+    assert(error);
+
+    int new_capacity = GetShorterCapacity(list->capacity);
+
+    int* new_data = InitDataArray(new_capacity, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    int* new_next = InitNextArray(new_capacity, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    int* new_prev = InitPrevArray(new_capacity, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    FillShorterList(list, new_data, new_next, new_prev);
+
+    FreeListArrays(list);
+
+    list->capacity      = new_capacity;
+    list->data          = new_data;
+    list->next          = new_next;
+    list->prev          = new_prev;
+    list->free          = list->size + 1;
+
+    return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static int GetShorterCapacity(const size_t old_capacity)
+{
+    int new_capacity = old_capacity / CPTY_MULTIPLIER;
+    if (new_capacity < DEFAULT_LIST_CAPACITY)
+        new_capacity = DEFAULT_LIST_CAPACITY;
+
+    return new_capacity;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void FillShorterList(const list_t* old_list, int* new_data, int* new_next, int* new_prev)
+{
+    assert(old_list);
+    assert(new_data);
+    assert(new_next);
+    assert(new_prev);
+
+    size_t curr_pos = old_list->next[FICTIVE_ELEM_POS];
+    size_t size     = old_list->size;
+
+    InitFictiveInSortedList(new_data, new_next, new_prev, size);
+
+    InitMiddleElemsInSortedList(old_list, new_data, new_next, new_prev, size, &curr_pos);
+
+    InitTailInSortedList(new_data, new_next, new_prev, size, old_list->data[curr_pos]);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline void InitFictiveInSortedList(int* new_data, int* new_next, int* new_prev, const size_t size)
+{
+    assert(new_data);
+    assert(new_next);
+    assert(new_prev);
+
+    new_data[FICTIVE_ELEM_POS] = POISON;
+    new_prev[FICTIVE_ELEM_POS] = size;
+    new_next[FICTIVE_ELEM_POS] = 1;
+
+    new_prev[new_next[FICTIVE_ELEM_POS]] = FICTIVE_ELEM_POS;
+    new_next[new_prev[FICTIVE_ELEM_POS]] = FICTIVE_ELEM_POS;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline void InitTailInSortedList(int* new_data, int* new_next, int* new_prev,
+                                        const size_t size, const int value)
+{
+    assert(new_data);
+    assert(new_next);
+    assert(new_prev);
+
+    new_data[size] = value;
+    new_prev[size] = size - 1;
+    new_next[size] = FICTIVE_ELEM_POS;
+
+    new_prev[new_next[size]] = size;
+    new_next[new_prev[size]] = size;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline void InitMiddleElemsInSortedList(const list_t* old_list,
+                                               int* new_data, int* new_next, int* new_prev,
+                                               const size_t size, size_t* curr_pos)
+{
+    assert(old_list);
+    assert(curr_pos);
+    assert(new_data);
+    assert(new_next);
+    assert(new_prev);
+
+    for (int i = 1; i < size; i++)
+    {
+        new_data[i] = old_list->data[*curr_pos];
+        new_prev[i] = i - 1;
+        new_next[i] = i + 1;
+
+        new_prev[new_next[i]] = i;
+        new_next[new_prev[i]] = i;
+
+        *curr_pos = old_list->next[*curr_pos];
+    }
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -237,7 +426,7 @@ static int* ReallocDataArray(const size_t new_capacity, list_t* list, ErrorInfo*
 {
     assert(error);
 
-    int* temp_data = (int*) realloc(list->data, new_capacity);
+    int* temp_data = (int*) realloc(list->data, new_capacity * sizeof(int));
     if (temp_data == nullptr)
     {
         error->code = (int) ListErrors::ALLOCATE_MEMORY;
@@ -259,7 +448,7 @@ static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo*
 {
     assert(error);
 
-    int* temp_next = (int*) realloc(list->next, new_capacity);
+    int* temp_next = (int*) realloc(list->next, new_capacity * sizeof(int));
     if (temp_next == nullptr)
     {
         error->code = (int) ListErrors::ALLOCATE_MEMORY;
@@ -282,7 +471,7 @@ static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo*
 {
     assert(error);
 
-    int* temp_prev = (int*) realloc(list->prev, new_capacity);
+    int* temp_prev = (int*) realloc(list->prev, new_capacity * sizeof(int));
     if (temp_prev == nullptr)
     {
         error->code = (int) ListErrors::ALLOCATE_MEMORY;
@@ -300,12 +489,12 @@ static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo*
 
 //-----------------------------------------------------------------------------------------------------
 
-static inline size_t GetFreeElemFromList(list_t* list, const size_t pos)
+static inline size_t GetFreeElemFromList(list_t* list)
 {
     assert(list);
 
-    int free_pos  = list->free;
-    list->free    = CHANGE_SIGN * list->next[free_pos];
+    int free_pos = list->free;
+    list->free   = CHANGE_SIGN * list->next[free_pos];
 
     return free_pos;
 }
@@ -336,6 +525,12 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
 
     AddFreeElemInList(list, pos);
     list->size--;
+
+    if (list->size <= list->capacity / (2 * CPTY_MULTIPLIER))
+    {
+        MakeListShorter(list, error);
+        RETURN_IF_LISTERROR((ListErrors) error->code);
+    }
 
     return ListErrors::NONE;
 }
@@ -383,47 +578,13 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
     list_t* list = (list_t*) fast_list;
     #pragma GCC diagnostic warning "-Wcast-qual"
 
-    size_t capacity = list->capacity;
-
-    PrintLog("%9s", "");
-    for (size_t i = 0; i < capacity; i++)
-        PrintLog(" %3d  ", i);
-    PrintLog("<br>\n");
-
-    LogPrintArray(list->data, capacity, "DATA");
-    LogPrintArray(list->next, capacity, "NEXT");
-    LogPrintArray(list->prev, capacity, "PREV");
-
-    PrintLog("HEAD     > %d<br>\n"
-             "TAIL     > %d<br>\n"
-             "FREE     > %d<br>\n"
-             "CAPACITY > %d<br>\n", GetListHead(list), GetListTail(list), list->free, list->capacity);
+    TextListDump(fp, list);
 
     DrawListGraph(list);
 
     LOG_END();
 
     return (int) ListErrors::NONE;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static inline void LogPrintArray(const int* array, size_t size, const char* name)
-{
-    assert(array);
-    assert(name);
-
-    PrintLog("%7s: ", name);
-
-    for (size_t i = 0; i < size; i++)
-    {
-        if (array[i] != POISON)
-            PrintLog("[%3d] ", array[i]);
-        else
-            PrintLog("[NaN] ");
-    }
-
-    PrintLog("<br>\n");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -436,7 +597,6 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
 
     #pragma GCC diagnostic ignored "-Wcast-qual"
     struct ErrorInfo* error = (struct ErrorInfo*) err;
-    #pragma GCC diagnostic warning "-Wcast-qual"
 
     switch ((ListErrors) error->code)
     {
@@ -467,9 +627,58 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
             LOG_END();
             return (int) ListErrors::UNKNOWN;
     }
+    #pragma GCC diagnostic warning "-Wcast-qual"
 }
 
-//-----------------------------------------------------------------------------------------------------
+//====================================================================================================
+
+static void TextListDump(FILE* fp, const list_t* list)
+{
+    fprintf(fp, "<b>DUMPING LIST</b><br>\n"
+                "FORMAT: IP -> [DATA, NEXT, PREV]<br>\n");
+
+    PrintListElements(fp, list);
+    PrintListInfo(fp, list);
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void PrintListInfo(FILE* fp, const list_t* list)
+{
+    fprintf(fp, "HEAD     > %d<br>\n"
+                "TAIL     > %d<br>\n"
+                "FREE     > %d<br>\n"
+                "CAPACITY > %lu<br>\n", GetListHead(list), GetListTail(list), list->free, list->capacity);
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void PrintListElements(FILE* fp, const list_t* list)
+{
+    for (int i = 0; i < list->capacity; i++)
+    {
+        ChooseElementHtmlColor(fp, list, i);
+
+        if (list->data[i] != POISON)
+            fprintf(fp, "%3d -> [%d, %d, %d]</b></font><br>\n", i, list->data[i], list->next[i], list->prev[i]);
+        else
+            fprintf(fp, "%3d -> [NaN, %d, %d]</b></font><br>\n", i, list->next[i], list->prev[i]);
+    }
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void ChooseElementHtmlColor(FILE* fp, const list_t* list, const size_t pos)
+{
+    if (list->prev[pos] == -1)
+        fprintf(fp, "<font color=\"#008000\"><b>");
+    else if (list->data[pos] == POISON)
+        fprintf(fp, "<font color=\"#474747\"><b>");
+    else
+        fprintf(fp, "<font color=\"#0000FF\"><b>");
+}
+
+//====================================================================================================
 
 static void DrawListGraph(list_t* list)
 {
@@ -491,19 +700,49 @@ static void DrawListGraph(list_t* list)
     MakeImg(DOT_FILE);
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
 static inline void DrawListInfo(FILE* dotf, const list_t* list)
 {
     assert(list);
 
     fprintf(dotf, "info [shape=record, style=filled, fillcolor=\"yellow\","
-                  "label=\"HEAD: %d | TAIL: %d | FREE: %d | SIZE: %d | CAPACITY: %d\","
+                  "label=\"HEAD: %d | TAIL: %d | FREE: %d | SIZE: %lu | CAPACITY: %lu\","
                   "fontcolor = \"black\", fontsize = 25];\n",
                               GetListHead(list), GetListTail(list), list->free, list->size, list->capacity);
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void ChooseVertexColor(FILE* dotf, const list_t* list, const size_t pos)
+{
+    assert(list);
+
+    if (list->prev[pos] == -1)
+        fprintf(dotf, "fillcolor=\"lightgreen\", color = darkgreen,");
+    else if (list->data[pos] == POISON)
+        fprintf(dotf, "fillcolor=\"lightgray\", color = black,");
+    else
+        fprintf(dotf, "fillcolor=\"lightblue\", color = darkblue,");
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void MarkImportantElements(FILE* dotf, const list_t* list, const size_t pos)
+{
+    assert(list);
+
+    if (pos == list->free)
+        fprintf(dotf, "FREE | ");
+
+    if (pos == GetListHead(list))
+        fprintf(dotf, "HEAD | ");
+
+    if (pos == GetListTail(list))
+        fprintf(dotf, "TAIL | ");
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
 static inline void DrawListElements(FILE* dotf, const list_t* list)
 {
@@ -512,23 +751,12 @@ static inline void DrawListElements(FILE* dotf, const list_t* list)
     for (int i = 0; i < list->capacity; i++)
     {
         fprintf(dotf, "%d [shape=Mrecord, style=filled, ", i);
-        if (list->prev[i] == -1)
-            fprintf(dotf, "fillcolor=\"lightgreen\", color = darkgreen,");
-        else if (list->data[i] == POISON)
-            fprintf(dotf, "fillcolor=\"lightgray\", color = black,");
-        else
-            fprintf(dotf, "fillcolor=\"lightblue\", color = darkblue,");
+
+        ChooseVertexColor(dotf, list, i);
 
         fprintf(dotf, " label=\" ");
 
-        if (i == list->free)
-            fprintf(dotf, "FREE | ");
-
-        if (i == GetListHead(list))
-            fprintf(dotf, "HEAD | ");
-
-        if (i == GetListTail(list))
-            fprintf(dotf, "TAIL | ");
+        MarkImportantElements(dotf, list, i);
 
         if (list->data[i] == POISON)
         {
@@ -543,7 +771,7 @@ static inline void DrawListElements(FILE* dotf, const list_t* list)
     }
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
 static inline void CenterListElements(FILE* dotf, const list_t* list)
 {
@@ -557,7 +785,7 @@ static inline void CenterListElements(FILE* dotf, const list_t* list)
     fprintf(dotf, "[weight = 993, color = \"white\"];\n");
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
 static inline void DrawListArrows(FILE* dotf, const list_t* list)
 {
@@ -569,9 +797,12 @@ static inline void DrawListArrows(FILE* dotf, const list_t* list)
             fprintf(dotf, "%d -> %d [color = \"red\"];\n", i, list->prev[i]);
 
         int next = list->next[i];
-        if (next < 0)
+        if (next < 0 || (next == 0 && list->prev[next] != i))
+        {
             next *= CHANGE_SIGN;
-
-        fprintf(dotf, "%d -> %d [color = \"green\"];\n", i, next);
+            fprintf(dotf, "%d -> %d [color = \"green\"];\n", i, next);
+        }
+        else
+            fprintf(dotf, "%d -> %d [color = \"blue\"];\n", i, next);
     }
 }
