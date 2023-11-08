@@ -60,6 +60,8 @@ PtrListErrors PtrListCtor(ptrlist_t* list, ErrorInfo* error);
 void          PtrListDtor(ptrlist_t* list);
 PtrListErrors PtrListInsertAfterElem(ptrlist_t* list, PtrListElem* pos, const int value,
                                                       PtrListElem** inserted_pos, ErrorInfo* error);
+PtrListErrors PtrListInsertBeforeElem(ptrlist_t* list, PtrListElem* pos, const int value,
+                                                        PtrListElem** inserted_pos, ErrorInfo* error);
 PtrListErrors PtrListRemoveElem(ptrlist_t* list, PtrListElem* pos, ErrorInfo* error);
 int           PtrListDump(FILE* fp, const void* list, const char* func, const char* file, const int line);
 PtrListErrors PtrListVerify(const ptrlist_t* list);
@@ -70,7 +72,7 @@ int PrintPtrListError(FILE* fp, const void* err, const char* func, const char* f
 #undef DUMP_PTRLIST
 
 #endif
-#define DUMP_PTRLIST(list)     do                                                              \
+#define DUMP_PTRLIST(list)  do                                                              \
                             {                                                               \
                                 LogDump(PtrListDump, (list), __func__, __FILE__, __LINE__); \
                             } while(0)

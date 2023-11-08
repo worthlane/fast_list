@@ -1,11 +1,15 @@
 #include "ptr_list.h"
 #include "graphs.h"
 
+// TODO add get
+// TODO structs
+// TODO shorter - public
+
 static const char* DOT_FILE = "tmp.dot";
 static const int   POISON   = -2147483647;
 
 static PtrListElem* InitListElement(const int data, PtrListElem* prev,
-                                    PtrListElem* next, ErrorInfo* error);
+                                                    PtrListElem* next, ErrorInfo* error);
 static inline void DestructListElement(PtrListElem* elem);
 
 static void CheckRemovingElement(ptrlist_t* list, PtrListElem* pos, ErrorInfo* error);
@@ -106,9 +110,9 @@ void PtrListDtor(ptrlist_t* list)
 
     PtrListElem* elem     = list->fictive;
     size_t       elem_amt = list->size + 1;
-    // fictive --------------------^
+    //     fictive --------------------^
 
-    while (elem_amt--)
+    while (elem_amt--) // TODO
     {
         DestructListElement(elem);
 
@@ -137,6 +141,30 @@ PtrListErrors PtrListInsertAfterElem(ptrlist_t* list, PtrListElem* pos, const in
     CHECK_PTRLIST(list);
 
     PtrListElem* inserted_elem = InitListElement(value, pos, pos->next, error);
+    *inserted_pos              = inserted_elem;
+    RETURN_IF_PTRLISTERROR((PtrListErrors) error->code);
+
+    PtrListElem* prev_elem = inserted_elem->prev;
+    PtrListElem* next_elem = inserted_elem->next;
+
+    next_elem->prev = inserted_elem;
+    prev_elem->next = inserted_elem;
+
+    list->size++;
+
+    return PtrListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+PtrListErrors PtrListInsertBeforeElem(ptrlist_t* list, PtrListElem* pos, const int value,
+                                                      PtrListElem** inserted_pos, ErrorInfo* error)
+{
+    assert(list);
+
+    CHECK_PTRLIST(list);
+
+    PtrListElem* inserted_elem = InitListElement(value, pos->prev, pos, error);
     *inserted_pos              = inserted_elem;
     RETURN_IF_PTRLISTERROR((PtrListErrors) error->code);
 
@@ -207,11 +235,12 @@ PtrListErrors PtrListVerify(const ptrlist_t* list)
 {
     assert(list);
 
-    if (list->fictive->data != POISON)                              return PtrListErrors::DAMAGED_FICTIVE;
+    if (list->fictive->data != POISON)
+        return PtrListErrors::DAMAGED_FICTIVE;
 
     PtrListElem* elem     = list->fictive;
     size_t       elem_amt = list->size + 1;
-    // fictive --------------------^
+    //     fictive --------------------^
 
     while (elem_amt--)
     {
@@ -385,7 +414,7 @@ static void DrawPtrListGraph(const ptrlist_t* list)
 
     fclose(dotf);
 
-    MakeImg(DOT_FILE);
+    MakeImgFromDot(DOT_FILE);
 }
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::

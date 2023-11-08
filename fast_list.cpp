@@ -352,7 +352,7 @@ static void FillShorterList(const list_t* old_list, int* new_data, int* new_next
     assert(new_next);
     assert(new_prev);
 
-    size_t curr_pos = old_list->next[FICTIVE_ELEM_POS];
+    size_t curr_pos = old_list->next[FICTIVE_ELEM_POS]; // мб можно убрать и функции переписать чуть
     size_t size     = old_list->size;
 
     InitFictiveInSortedList(new_data, new_next, new_prev, size);
@@ -456,7 +456,7 @@ static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo*
         return nullptr;
     }
 
-    //                                               v-- we dont need to fill last element
+    //                                               v-- we dont need to init last element
     for (size_t i = list->capacity; i < new_capacity - 1; i++)
         temp_next[i] = CHANGE_SIGN * (i + 1);
 
@@ -697,7 +697,7 @@ static void DrawListGraph(list_t* list)
 
     fclose(dotf);
 
-    MakeImg(DOT_FILE);
+    MakeImgFromDot(DOT_FILE);
 }
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
@@ -794,15 +794,15 @@ static inline void DrawListArrows(FILE* dotf, const list_t* list)
     for (int i = 0; i < list->capacity; i++)
     {
         if (list->prev[i] != -1)
-            fprintf(dotf, "%d -> %d [color = \"red\"];\n", i, list->prev[i]);
+            fprintf(dotf, "%d -> %d [weight = 0, color = \"red\", constraint = false];\n", i, list->prev[i]);
 
         int next = list->next[i];
         if (next < 0 || (next == 0 && list->prev[next] != i))
         {
             next *= CHANGE_SIGN;
-            fprintf(dotf, "%d -> %d [color = \"green\"];\n", i, next);
+            fprintf(dotf, "%d -> %d [weight = 0, color = \"green\", constraint = false];\n", i, next);
         }
         else
-            fprintf(dotf, "%d -> %d [color = \"blue\"];\n", i, next);
+            fprintf(dotf, "%d -> %d [weight = 0, color = \"blue\", constraint = false];\n", i, next);
     }
 }

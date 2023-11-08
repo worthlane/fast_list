@@ -9,6 +9,6 @@ static const size_t MAX_IMG_FILE_LEN = 100;
 void StartGraph(FILE* dotf);
 void EndGraph(FILE* dotf);
 
-void MakeImg(const char* dot_file);
+void MakeImgFromDot(const char* dot_file);
 
 #endif

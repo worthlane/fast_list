@@ -9,45 +9,57 @@ int main(const int argc, const char* argv[])
 {
     OpenLogFile(argv[0]);
 
-    ptrlist_t list = {};
-
+    list_t list     = {};
     ErrorInfo error = {};
 
-    PtrListCtor(&list, &error);
+    ListCtor(&list, &error);
+    DUMP_LIST(&list);
 
-    DUMP_PTRLIST(&list);
+    size_t a = 0;
+    size_t b = 0;
 
-    PtrListElem* a = 0;
-    PtrListElem* b = 0;
+    ListInsertAfterElem(&list, 0, 23, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 29, &b, &error);
+    ListInsertAfterElem(&list, a, 29, &a, &error);
+    ListInsertAfterElem(&list, a, 29, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &b, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, b, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
+    ListInsertAfterElem(&list, a, 28, &a, &error);
 
-    PtrListInsertAfterElem(&list, list.fictive, 23, &a, &error);
-    PtrListInsertAfterElem(&list, a, 28, &a, &error);
-    PtrListInsertAfterElem(&list, a, 29, &b, &error);
-    PtrListInsertAfterElem(&list, a, 29, &a, &error);
-    PtrListInsertAfterElem(&list, a, 29, &a, &error);
-    PtrListInsertAfterElem(&list, b, 28, &a, &error);
-    PtrListInsertAfterElem(&list, a, 28, &b, &error);
-    PtrListInsertAfterElem(&list, a, 28, &a, &error);
-    PtrListInsertAfterElem(&list, a, 28, &a, &error);
-    PtrListInsertAfterElem(&list, b, 28, &a, &error);
-    PtrListInsertAfterElem(&list, b, 28, &a, &error);
-    PtrListInsertAfterElem(&list, b, 28, &a, &error);
-    PtrListInsertAfterElem(&list, a, 28, &a, &error);
-    PtrListInsertAfterElem(&list, a, 28, &a, &error);
-    PtrListInsertAfterElem(&list, a, 28, &a, &error);
+    DUMP_LIST(&list);
 
-    DUMP_PTRLIST(&list);
+    ListInsertAfterElem(&list, a, 228, &a, &error);
+    ListInsertAfterElem(&list, a, 228, &a, &error);
+    ListInsertAfterElem(&list, a, 228, &a, &error);
 
-    PtrListInsertAfterElem(&list, a, 228, &a, &error);
-    PtrListInsertAfterElem(&list, a, 228, &a, &error);
-    PtrListInsertAfterElem(&list, a, 228, &a, &error);
+    DUMP_LIST(&list);
 
-    DUMP_PTRLIST(&list);
+    ListRemoveElem(&list, 10, &error);
+    ListRemoveElem(&list, 7, &error);
+    ListRemoveElem(&list, 11, &error);
+    ListRemoveElem(&list, 2, &error);
+    ListRemoveElem(&list, 1, &error);
+    ListRemoveElem(&list, 6, &error);
+    ListRemoveElem(&list, 18, &error);
+    ListRemoveElem(&list, 15, &error);
+    ListRemoveElem(&list, 14, &error);
 
-    PtrListRemoveElem(&list, a, &error);
-    PtrListRemoveElem(&list, b, &error);
+    DUMP_LIST(&list);
 
-    DUMP_PTRLIST(&list);
+    ListRemoveElem(&list, 5, &error);
+    ListRemoveElem(&list, 13, &error);
+    ListRemoveElem(&list, 12, &error);
+    ListRemoveElem(&list, 4, &error);
+
+    DUMP_LIST(&list);
 
     /*ListRemoveElem(&list, 8, &error);
 
@@ -71,6 +83,8 @@ int main(const int argc, const char* argv[])
     ListInsertAfterElem(&list, a, 29, &b, &error);
 
     DUMP_LIST(&list);*/
+
+    ListDtor(&list);
 
     return 0;
 }
