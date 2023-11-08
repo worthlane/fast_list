@@ -13,14 +13,24 @@ static void CheckRemovingElement(ptrlist_t* list, PtrListElem* pos, ErrorInfo* e
 static inline PtrListElem* GetPtrListHead(const ptrlist_t* list);
 static inline PtrListElem* GetPtrListTail(const ptrlist_t* list);
 
+// ========= TEXT DUMP =======
+
+static void TextPtrListDump(FILE* fp, const ptrlist_t* list);
+
+static inline void PrintPtrListInfo(FILE* fp, const ptrlist_t* list);
+static inline void ChooseElementHtmlColor(FILE* fp, const PtrListElem* cur_elem);
+static void PrintPtrListElements(FILE* fp, const ptrlist_t* list);
+
+// ===========================
+
 // ========= GRAPHS ==========
 
-static void DrawListGraph(ptrlist_t* list);
+static void DrawPtrListGraph(const ptrlist_t* list);
 
-static inline void DrawListInfo(FILE* dotf, const ptrlist_t* list);
-static inline void DrawListElements(FILE* dotf, const ptrlist_t* list);
-static inline void CenterListElements(FILE* dotf, const ptrlist_t* list);
-static inline void DrawListArrows(FILE* dotf, const ptrlist_t* list);
+static inline void DrawPtrListInfo(FILE* dotf, const ptrlist_t* list);
+static inline void DrawPtrListElements(FILE* dotf, const ptrlist_t* list);
+static inline void CenterPtrListElements(FILE* dotf, const ptrlist_t* list);
+static inline void DrawPtrListArrows(FILE* dotf, const ptrlist_t* list);
 
 // ===========================
 
@@ -279,34 +289,9 @@ int PtrListDump(FILE* fp, const void* ptr_list, const char* func, const char* fi
     ptrlist_t* list = (ptrlist_t*) ptr_list;
     #pragma GCC diagnostic warning "-Wcast-qual"
 
-    size_t elem_amt   = list->size + 1;
-    PtrListElem* elem = list->fictive;
-    int elem_cnt      = 0;
+    TextPtrListDump(fp, list);
 
-    fprintf(fp, "LIST[%p]<br>\n"
-                "{<br>\n"
-                "SIZE    > %lu<br>\n"
-                "FICTIVE > [%p]<br>\n"
-                "}<br>\n"
-                "ELEMENTS: <br>\n", list, list->size, list->fictive);
-
-    while (elem_amt--)
-    {
-        if (elem->data != POISON)
-        {
-            fprintf(fp, "\t%3d[%p]: data[%d], next[%p], prev[%p]<br>\n", elem_cnt++, elem,
-                                                                         elem->data, elem->next, elem->prev);
-        }
-        else
-        {
-            fprintf(fp, "\t%3d[%p]: data[NaN], next[%p], prev[%p]<br>\n", elem_cnt++, elem,
-                                                                          elem->next, elem->prev);
-        }
-
-        elem = elem->next;
-    }
-
-    DrawListGraph(list);
+    DrawPtrListGraph(list);
 
     LOG_END();
 
@@ -315,7 +300,75 @@ int PtrListDump(FILE* fp, const void* ptr_list, const char* func, const char* fi
 
 //-----------------------------------------------------------------------------------------------------
 
-static void DrawListGraph(ptrlist_t* list)
+static void TextPtrListDump(FILE* fp, const ptrlist_t* list)
+{
+    assert(list);
+
+    PrintPtrListInfo(fp, list);
+    PrintPtrListElements(fp, list);
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void PrintPtrListInfo(FILE* fp, const ptrlist_t* list)
+{
+    assert(list);
+
+    fprintf(fp, "LIST[%p]<br>\n"
+                "{<br>\n"
+                "SIZE    > %lu<br>\n"
+                "FICTIVE > [%p]<br>\n"
+                "}<br>\n"
+                "ELEMENTS: <br>\n", list, list->size, list->fictive);
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void ChooseElementHtmlColor(FILE* fp, const PtrListElem* cur_elem)
+{
+    assert(cur_elem);
+
+    if (cur_elem->data == POISON)
+        fprintf(fp, "<font color=\"#474747\"><b>");
+    else
+        fprintf(fp, "<font color=\"#0000FF\"><b>");
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static void PrintPtrListElements(FILE* fp, const ptrlist_t* list)
+{
+    assert(list);
+
+    size_t       elem_amt   = list->size + 1;
+    PtrListElem* cur_elem   = list->fictive;
+    int          elem_cnt   = 0;
+
+    while (elem_amt--)
+    {
+        ChooseElementHtmlColor(fp, cur_elem);
+
+        if (cur_elem->data != POISON)
+        {
+            fprintf(fp, "\t%3d[%p]: data[%d], next[%p], prev[%p]</b></font><br>\n",
+                                                                         elem_cnt++,     cur_elem,
+                                                                         cur_elem->data, cur_elem->next,
+                                                                         cur_elem->prev);
+        }
+        else
+        {
+            fprintf(fp, "\t%3d[%p]: data[NaN], next[%p], prev[%p]</b></font><br>\n",
+                                                                          elem_cnt++,     cur_elem,
+                                                                          cur_elem->next, cur_elem->prev);
+        }
+
+        cur_elem = cur_elem->next;
+    }
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void DrawPtrListGraph(const ptrlist_t* list)
 {
     assert(list);
 
@@ -323,10 +376,10 @@ static void DrawListGraph(ptrlist_t* list)
 
     StartGraph(dotf);
 
-    DrawListInfo(dotf, list);
-    DrawListElements(dotf, list);
-    CenterListElements(dotf, list);
-    DrawListArrows(dotf, list);
+    DrawPtrListInfo(dotf, list);
+    DrawPtrListElements(dotf, list);
+    CenterPtrListElements(dotf, list);
+    DrawPtrListArrows(dotf, list);
 
     EndGraph(dotf);
 
@@ -335,9 +388,9 @@ static void DrawListGraph(ptrlist_t* list)
     MakeImg(DOT_FILE);
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
-static inline void DrawListInfo(FILE* dotf, const ptrlist_t* list)
+static inline void DrawPtrListInfo(FILE* dotf, const ptrlist_t* list)
 {
     assert(list);
 
@@ -347,9 +400,9 @@ static inline void DrawListInfo(FILE* dotf, const ptrlist_t* list)
                               GetPtrListHead(list), GetPtrListTail(list), list->size);
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
-static inline void DrawListElements(FILE* dotf, const ptrlist_t* list)
+static inline void DrawPtrListElements(FILE* dotf, const ptrlist_t* list)
 {
     assert(list);
 
@@ -392,9 +445,9 @@ static inline void DrawListElements(FILE* dotf, const ptrlist_t* list)
     #pragma GCC diagnostic warning "-Wformat"
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
-static inline void CenterListElements(FILE* dotf, const ptrlist_t* list)
+static inline void CenterPtrListElements(FILE* dotf, const ptrlist_t* list)
 {
     assert(list);
 
@@ -416,9 +469,9 @@ static inline void CenterListElements(FILE* dotf, const ptrlist_t* list)
     #pragma GCC diagnostic warning "-Wformat"
 }
 
-//:::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
-static inline void DrawListArrows(FILE* dotf, const ptrlist_t* list)
+static inline void DrawPtrListArrows(FILE* dotf, const ptrlist_t* list)
 {
     assert(list);
 
