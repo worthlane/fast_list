@@ -550,8 +550,8 @@ static inline void DrawPtrListArrows(FILE* dotf, const ptrlist_t* list)
 
     for (int i = 0; i < elem_amt; i++)
     {
-        fprintf(dotf, "%lld -> %lld [color = \"red\"];\n", elem, elem->prev);
-        fprintf(dotf, "%lld -> %lld [color = \"green\"];\n", elem, elem->next);
+        fprintf(dotf, "%lld -> %lld [weight = 0, color = \"red\", constraint = false];\n", elem, elem->prev);
+        fprintf(dotf, "%lld -> %lld [weight = 0, color = \"green\", constraint = false];\n", elem, elem->next);
 
         elem = elem->next;
     }
