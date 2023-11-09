@@ -3,11 +3,17 @@
 
 #include "errors.h"
 
+struct ListElem
+{
+    int data;
+    int next;
+    int prev;
+};
+
 struct List
 {
-    int* data;
-    int* next;
-    int* prev;
+
+    ListElem* elems;
 
     int free;
 
@@ -28,9 +34,10 @@ enum class ListErrors
     UNKNOWN
 };
 
+int PrintListError(FILE* fp, const void* err, const char* func, const char* file, const int line);
+
 #ifdef EXIT_IF_LISTERROR
 #undef EXIT_IF_LISTERROR
-
 #endif
 #define EXIT_IF_LISTERROR(error)            do                                                          \
                                             {                                                           \
@@ -42,7 +49,6 @@ enum class ListErrors
                                             } while(0)
 #ifdef RETURN_IF_LISTERROR
 #undef RETURN_IF_LISTERROR
-
 #endif
 #define RETURN_IF_LISTERROR(error)          do                                                          \
                                             {                                                           \
@@ -55,21 +61,26 @@ enum class ListErrors
 
 typedef struct List list_t;
 
-static const size_t DEFAULT_LIST_CAPACITY = 4;
+static const size_t DEFAULT_LIST_CAPACITY = 16;
+ListErrors MakeListShorter(list_t* list, const size_t new_capacity, ErrorInfo* error);
 
 ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity = DEFAULT_LIST_CAPACITY);
 void       ListDtor(list_t* list);
+
+ListErrors GetListElement(const list_t* list, const size_t pos, int* destination, ErrorInfo* error);
+int        GetListHead(const list_t* list);
+int        GetListTail(const list_t* list);
+
 ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
-                                             size_t* inserted_pos, ErrorInfo* error);
+                               size_t* inserted_pos, ErrorInfo* error);
+ListErrors ListInsertBeforeElem(list_t* list, const size_t pos, const int value,
+                                size_t* inserted_pos, ErrorInfo* error);
 ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error);
 int        ListDump(FILE* fp, const void* list, const char* func, const char* file, const int line);
 ListErrors ListVerify(const list_t* list);
 
-int PrintListError(FILE* fp, const void* err, const char* func, const char* file, const int line);
-
 #ifdef DUMP_LIST
 #undef DUMP_LIST
-
 #endif
 #define DUMP_LIST(list)     do                                                              \
                             {                                                               \
@@ -77,3 +88,4 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
                             } while(0)
 
 #endif
+

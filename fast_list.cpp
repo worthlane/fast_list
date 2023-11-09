@@ -4,47 +4,31 @@
 #include "fast_list.h"
 #include "graphs.h"
 
-static const char*  DOT_FILE         = "tmp.dot";
-static const int    POISON           = -2147483647;
-static const int    CHANGE_SIGN      = -1;
-static const size_t FICTIVE_ELEM_POS =  0;
-static const int    CPTY_MULTIPLIER  =  2;
+static const char*  DOT_FILE             = "tmp.dot";
+static const int    POISON               = -2147483647;
+static const int    CHANGE_SIGN          = -1;
+static const size_t FICTIVE_ELEM_POS     =  0;
+static const int    CAPACITY_MULTIPLIER  =  2;
 
-static int* InitDataArray(const size_t capacity, ErrorInfo* error);
-static int* InitNextArray(const size_t capacity, ErrorInfo* error);
-static int* InitPrevArray(const size_t capacity, ErrorInfo* error);
-static inline void InitListElem(list_t* list, const size_t pos, const int value,
-                                              const size_t prev_pos, const size_t next_pos);
+static ListElem*   InitListElemsArray(const size_t capacity, ErrorInfo* error);
+static inline void InitListElem(ListElem* elem, const int value,
+                                const size_t prev_pos, const size_t next_pos);
+static inline void UpdateNeighbourElems(ListElem* elems, const size_t pos);
 
 static inline void   AddFreeElemInList(list_t* list, const size_t pos);
 static inline size_t GetFreeElemFromList(list_t* list);
 
 static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo* error);
-
-static inline int GetListHead(const list_t* list);
-static inline int GetListTail(const list_t* list);
-
-static inline void FreeListArrays(list_t* list);
+static void CheckGettingElement(const list_t* list, const size_t pos, ErrorInfo* error);
 
 // ================== REALLOC FUNCS ===================
 
 static ListErrors MakeListLonger(list_t* list, ErrorInfo* error);
-static ListErrors MakeListShorter(list_t* list, ErrorInfo* error);
 
-static int GetShorterCapacity(const size_t old_capacity);
+static void FillShorterList(const list_t* old_list, ListElem* elems);
 
-static void FillShorterList(const list_t* old_list, int* new_data, int* new_next, int* new_prev);
-
-static inline void InitFictiveInSortedList(int* new_data, int* new_next, int* new_prev, const size_t size);
-static inline void InitMiddleElemsInSortedList(const list_t* old_list,
-                                               int* new_data, int* new_next, int* new_prev,
-                                               const size_t size, size_t* curr_pos);
-static inline void InitTailInSortedList(int* new_data, int* new_next, int* new_prev,
-                                        const size_t size, const int value);
-
-static int* ReallocDataArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
-static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
-static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo* error);
+static ListElem* ReallocListElemsArray(ListElem* elems, const size_t new_capacity,
+                                       const size_t old_capacity, ErrorInfo* error);
 
 // =====================================================
 
@@ -60,7 +44,7 @@ static inline void ChooseElementHtmlColor(FILE* fp, const list_t* list, const si
 
 // ========= GRAPHS ==========
 
-static void DrawListGraph(list_t* list);
+static void DrawListGraph(const list_t* list);
 
 static inline void DrawListInfo(FILE* dotf, const list_t* list);
 static inline void DrawListElements(FILE* dotf, const list_t* list);
@@ -71,25 +55,26 @@ static inline void MarkImportantElements(FILE* dotf, const list_t* list, const s
 
 // ===========================
 
+#ifdef CHECK_LIST
+#undef CHECK_LIST
+#endif
+#define CHECK_LIST(list)    do                                                              \
+                            {                                                               \
+                                ListErrors list_err_ = ListVerify(list);                    \
+                                if (list_err_ != ListErrors::NONE)                          \
+                                    return list_err_;                                       \
+                            } while(0)
+
 ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity)
 {
     assert(list);
 
-    int* data = InitDataArray(capacity, error);
+    ListElem* elems = InitListElemsArray(capacity, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    int* next = InitNextArray(capacity, error);
-    RETURN_IF_LISTERROR((ListErrors) error->code);
-
-    int* prev = InitPrevArray(capacity, error);
-    RETURN_IF_LISTERROR((ListErrors) error->code);
-
-    list->data     = data;
-    list->next     = next;
-    list->prev     = prev;
+    list->elems    = elems;
 
     list->free     = 1;
-
     list->capacity = capacity;
     list->size     = 0;
 
@@ -98,77 +83,69 @@ ListErrors ListCtor(list_t* list, ErrorInfo* error, size_t capacity)
 
 //-----------------------------------------------------------------------------------------------------
 
-static int* InitDataArray(const size_t capacity, ErrorInfo* error)
+static ListElem* InitListElemsArray(const size_t capacity, ErrorInfo* error)
 {
     assert(error);
 
-    int* data = (int*) calloc(capacity, sizeof(int));
-    if (data == nullptr)
+    ListElem* elems = (ListElem*) calloc(capacity, sizeof(ListElem));
+    if (elems == nullptr)
     {
         error->code = (int) ListErrors::ALLOCATE_MEMORY;
-        error->data = "DATA ARRAY";
+        error->data = "ELEMENTS ARRAY";
         return nullptr;
     }
 
-    for (size_t i = 0; i < capacity; i++)
-        data[i] = POISON;
+    InitListElem(&elems[FICTIVE_ELEM_POS], POISON, 0, 0);
 
-    return data;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static inline int GetListHead(const list_t* list)
-{
-    return list->next[FICTIVE_ELEM_POS];
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static inline int GetListTail(const list_t* list)
-{
-    return list->prev[FICTIVE_ELEM_POS];
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static int* InitNextArray(const size_t capacity, ErrorInfo* error)
-{
-    assert(error);
-
-    int* next = (int*) calloc(capacity, sizeof(int));
-    if (next == nullptr)
-    {
-        error->code = (int) ListErrors::ALLOCATE_MEMORY;
-        error->data = "NEXT ARRAY";
-        return nullptr;
-    }
-
-    //                           v-- we dont need to fill last element
+    //                           v------ we dont fill fictive and last elements
     for (int i = 1; i < capacity - 1; i++)
-        next[i] = CHANGE_SIGN * (i + 1);
+        InitListElem(&elems[i], POISON, -1, CHANGE_SIGN * (i + 1));
 
-    return next;
+    InitListElem(&elems[capacity - 1], POISON, -1, 0);
+
+    return elems;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static int* InitPrevArray(const size_t capacity, ErrorInfo* error)
+int GetListHead(const list_t* list)
 {
+    return list->elems[FICTIVE_ELEM_POS].next;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+int GetListTail(const list_t* list)
+{
+    return list->elems[FICTIVE_ELEM_POS].prev;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+ListErrors GetListElement(const list_t* list, const size_t pos, int* destination, ErrorInfo* error)
+{
+    assert(list);
     assert(error);
+    assert(destination);
 
-    int* prev = (int*) calloc(capacity, sizeof(int));
-    if (prev == nullptr)
+    CheckGettingElement(list, pos, error);
+    RETURN_IF_LISTERROR((ListErrors) error->code);
+
+    *destination = list->elems[pos].data;
+
+    return ListErrors::NONE;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void CheckGettingElement(const list_t* list, const size_t pos, ErrorInfo* error)
+{
+    if (list->elems[pos].data == POISON)
     {
-        error->code = (int) ListErrors::ALLOCATE_MEMORY;
-        error->data = "PREV ARRAY";
-        return nullptr;
+        error->code = (int) ListErrors::EMPTY_ELEMENT;
+        error->data = list;
+        return;
     }
-
-    for (int i = 1; i < capacity; i++)
-        prev[i] = -1;
-
-    return prev;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -177,7 +154,7 @@ void ListDtor(list_t* list)
 {
     assert(list);
 
-    FreeListArrays(list);
+    free(list->elems);
 
     list->free     = POISON;
 
@@ -187,34 +164,12 @@ void ListDtor(list_t* list)
 
 //-----------------------------------------------------------------------------------------------------
 
-static inline void FreeListArrays(list_t* list)
-{
-    assert(list);
-
-    free(list->data);
-    free(list->next);
-    free(list->prev);
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-#ifdef CHECK_LIST
-#undef CHECK_LIST
-
-#endif
-#define CHECK_LIST(list)    do                                                              \
-                            {                                                               \
-                                ListErrors list_err_ = ListVerify(list);                    \
-                                if (list_err_ != ListErrors::NONE)                          \
-                                    return list_err_;                                       \
-                            } while(0)
-
 ListErrors ListVerify(const list_t* list)
 {
     assert(list);
 
-    if (list->size > list->capacity)            return ListErrors::INVALID_SIZE;
-    if (list->data[0] != POISON)                return ListErrors::DAMAGED_FICTIVE;
+    if (list->size > list->capacity)                  return ListErrors::INVALID_SIZE;
+    if (list->elems[0].data != POISON)                return ListErrors::DAMAGED_FICTIVE;
 
     return ListErrors::NONE;
 }
@@ -238,10 +193,8 @@ ListErrors ListInsertAfterElem(list_t* list, const size_t pos, const int value,
     size_t free_pos = GetFreeElemFromList(list);
     *inserted_pos   = free_pos;
 
-    InitListElem(list, free_pos, value, pos, list->next[pos]);
-
-    list->prev[list->next[free_pos]] = free_pos;
-    list->next[list->prev[free_pos]] = free_pos;
+    InitListElem(&list->elems[free_pos], value, pos, list->elems[pos].next);
+    UpdateNeighbourElems(list->elems, free_pos);
 
     list->size++;
 
@@ -267,10 +220,8 @@ ListErrors ListInsertBeforeElem(list_t* list, const size_t pos, const int value,
     size_t free_pos = GetFreeElemFromList(list);
     *inserted_pos   = free_pos;
 
-    InitListElem(list, free_pos, value, list->prev[pos], pos);
-
-    list->prev[list->next[free_pos]] = free_pos;
-    list->next[list->prev[free_pos]] = free_pos;
+    InitListElem(&list->elems[free_pos], value, list->elems[pos].prev, pos);
+    UpdateNeighbourElems(list->elems, free_pos);
 
     list->size++;
 
@@ -284,16 +235,12 @@ static ListErrors MakeListLonger(list_t* list, ErrorInfo* error)
     assert(list);
     assert(error);
 
-    int new_capacity = list->capacity * CPTY_MULTIPLIER;
+    int new_capacity = list->capacity * CAPACITY_MULTIPLIER;
 
-    ReallocDataArray(new_capacity, list, error);
+    ListElem* new_elems = ReallocListElemsArray(list->elems, new_capacity, list->capacity, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    ReallocNextArray(new_capacity, list, error);
-    RETURN_IF_LISTERROR((ListErrors) error->code);
-
-    ReallocPrevArray(new_capacity, list, error);
-    RETURN_IF_LISTERROR((ListErrors) error->code);
+    list->elems    = new_elems;
 
     list->free     = list->capacity;
     list->capacity = new_capacity;
@@ -303,30 +250,50 @@ static ListErrors MakeListLonger(list_t* list, ErrorInfo* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-static ListErrors MakeListShorter(list_t* list, ErrorInfo* error)
+static ListElem* ReallocListElemsArray(ListElem* elems, const size_t new_capacity,
+                                       const size_t old_capacity, ErrorInfo* error)
+{
+    assert(elems);
+    assert(error);
+
+    ListElem* temp_elems = (ListElem*) realloc(elems, new_capacity * sizeof(ListElem));
+    if (temp_elems == nullptr)
+    {
+        error->code = (int) ListErrors::ALLOCATE_MEMORY;
+        error->data = "ELEMENTS ARRAY";
+        return nullptr;
+    }
+
+    for (size_t i = old_capacity; i < new_capacity - 1; i++)
+        InitListElem(&temp_elems[i], POISON, -1, CHANGE_SIGN * (i + 1));
+
+    InitListElem(&temp_elems[new_capacity - 1], POISON, -1, 0);
+
+    return temp_elems;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+ListErrors MakeListShorter(list_t* list, const size_t new_capacity, ErrorInfo* error)
 {
     assert(list);
     assert(error);
 
-    int new_capacity = GetShorterCapacity(list->capacity);
+    if (list->size > new_capacity)
+    {
+        error->code = (int) ListErrors::INVALID_SIZE;
+        return ListErrors::INVALID_SIZE;
+    }
 
-    int* new_data = InitDataArray(new_capacity, error);
+    ListElem* new_elems = InitListElemsArray(new_capacity, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    int* new_next = InitNextArray(new_capacity, error);
-    RETURN_IF_LISTERROR((ListErrors) error->code);
+    FillShorterList(list, new_elems);
 
-    int* new_prev = InitPrevArray(new_capacity, error);
-    RETURN_IF_LISTERROR((ListErrors) error->code);
-
-    FillShorterList(list, new_data, new_next, new_prev);
-
-    FreeListArrays(list);
+    free(list->elems);
+    list->elems         = new_elems;
 
     list->capacity      = new_capacity;
-    list->data          = new_data;
-    list->next          = new_next;
-    list->prev          = new_prev;
     list->free          = list->size + 1;
 
     return ListErrors::NONE;
@@ -334,157 +301,27 @@ static ListErrors MakeListShorter(list_t* list, ErrorInfo* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-static int GetShorterCapacity(const size_t old_capacity)
-{
-    int new_capacity = old_capacity / CPTY_MULTIPLIER;
-    if (new_capacity < DEFAULT_LIST_CAPACITY)
-        new_capacity = DEFAULT_LIST_CAPACITY;
-
-    return new_capacity;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static void FillShorterList(const list_t* old_list, int* new_data, int* new_next, int* new_prev)
+static void FillShorterList(const list_t* old_list, ListElem* elems)
 {
     assert(old_list);
-    assert(new_data);
-    assert(new_next);
-    assert(new_prev);
+    assert(elems);
 
-    size_t curr_pos = old_list->next[FICTIVE_ELEM_POS]; // мб можно убрать и функции переписать чуть
+    size_t curr_pos = old_list->elems[FICTIVE_ELEM_POS].next;
     size_t size     = old_list->size;
 
-    InitFictiveInSortedList(new_data, new_next, new_prev, size);
-
-    InitMiddleElemsInSortedList(old_list, new_data, new_next, new_prev, size, &curr_pos);
-
-    InitTailInSortedList(new_data, new_next, new_prev, size, old_list->data[curr_pos]);
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static inline void InitFictiveInSortedList(int* new_data, int* new_next, int* new_prev, const size_t size)
-{
-    assert(new_data);
-    assert(new_next);
-    assert(new_prev);
-
-    new_data[FICTIVE_ELEM_POS] = POISON;
-    new_prev[FICTIVE_ELEM_POS] = size;
-    new_next[FICTIVE_ELEM_POS] = 1;
-
-    new_prev[new_next[FICTIVE_ELEM_POS]] = FICTIVE_ELEM_POS;
-    new_next[new_prev[FICTIVE_ELEM_POS]] = FICTIVE_ELEM_POS;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static inline void InitTailInSortedList(int* new_data, int* new_next, int* new_prev,
-                                        const size_t size, const int value)
-{
-    assert(new_data);
-    assert(new_next);
-    assert(new_prev);
-
-    new_data[size] = value;
-    new_prev[size] = size - 1;
-    new_next[size] = FICTIVE_ELEM_POS;
-
-    new_prev[new_next[size]] = size;
-    new_next[new_prev[size]] = size;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static inline void InitMiddleElemsInSortedList(const list_t* old_list,
-                                               int* new_data, int* new_next, int* new_prev,
-                                               const size_t size, size_t* curr_pos)
-{
-    assert(old_list);
-    assert(curr_pos);
-    assert(new_data);
-    assert(new_next);
-    assert(new_prev);
+    InitListElem(&elems[FICTIVE_ELEM_POS], POISON, size, 1);
+    UpdateNeighbourElems(elems, FICTIVE_ELEM_POS);
 
     for (int i = 1; i < size; i++)
     {
-        new_data[i] = old_list->data[*curr_pos];
-        new_prev[i] = i - 1;
-        new_next[i] = i + 1;
+        InitListElem(&elems[i], old_list->elems[curr_pos].data, i - 1, i + 1);
+        UpdateNeighbourElems(elems, i);
 
-        new_prev[new_next[i]] = i;
-        new_next[new_prev[i]] = i;
-
-        *curr_pos = old_list->next[*curr_pos];
-    }
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static int* ReallocDataArray(const size_t new_capacity, list_t* list, ErrorInfo* error)
-{
-    assert(error);
-
-    int* temp_data = (int*) realloc(list->data, new_capacity * sizeof(int));
-    if (temp_data == nullptr)
-    {
-        error->code = (int) ListErrors::ALLOCATE_MEMORY;
-        error->data = "DATA ARRAY";
-        return nullptr;
+        curr_pos = old_list->elems[curr_pos].next;
     }
 
-    for (size_t i = list->capacity; i < new_capacity; i++)
-        temp_data[i] = POISON;
-
-    list->data = temp_data;
-
-    return temp_data;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static int* ReallocNextArray(const size_t new_capacity, list_t* list, ErrorInfo* error)
-{
-    assert(error);
-
-    int* temp_next = (int*) realloc(list->next, new_capacity * sizeof(int));
-    if (temp_next == nullptr)
-    {
-        error->code = (int) ListErrors::ALLOCATE_MEMORY;
-        error->data = "NEXT ARRAY";
-        return nullptr;
-    }
-
-    //                                               v-- we dont need to init last element
-    for (size_t i = list->capacity; i < new_capacity - 1; i++)
-        temp_next[i] = CHANGE_SIGN * (i + 1);
-
-    list->next = temp_next;
-
-    return temp_next;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static int* ReallocPrevArray(const size_t new_capacity, list_t* list, ErrorInfo* error)
-{
-    assert(error);
-
-    int* temp_prev = (int*) realloc(list->prev, new_capacity * sizeof(int));
-    if (temp_prev == nullptr)
-    {
-        error->code = (int) ListErrors::ALLOCATE_MEMORY;
-        error->data = "PREV ARRAY";
-        return nullptr;
-    }
-
-    for (size_t i = list->capacity; i < new_capacity; i++)
-        temp_prev[i] = -1;
-
-    list->prev = temp_prev;
-
-    return temp_prev;
+    InitListElem(&elems[size], old_list->elems[curr_pos].data, size - 1, FICTIVE_ELEM_POS);
+    UpdateNeighbourElems(elems, size);
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -494,21 +331,31 @@ static inline size_t GetFreeElemFromList(list_t* list)
     assert(list);
 
     int free_pos = list->free;
-    list->free   = CHANGE_SIGN * list->next[free_pos];
+    list->free   = CHANGE_SIGN * list->elems[free_pos].next;
 
     return free_pos;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static inline void InitListElem(list_t* list, const size_t pos, const int value,
-                                              const size_t prev_pos, const size_t next_pos)
+static inline void InitListElem(ListElem* elem, const int value,
+                                const size_t prev_pos, const size_t next_pos)
 {
-    assert(list);
+    assert(elem);
 
-    list->data[pos] = value;
-    list->prev[pos] = prev_pos;
-    list->next[pos] = next_pos;
+    elem->data = value;
+    elem->prev = prev_pos;
+    elem->next = next_pos;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static inline void UpdateNeighbourElems(ListElem* elems, const size_t pos)
+{
+    assert(elems);
+
+    elems[elems[pos].next].prev = pos;
+    elems[elems[pos].prev].next = pos;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -520,17 +367,11 @@ ListErrors ListRemoveElem(list_t* list, const size_t pos, ErrorInfo* error)
     CheckRemovingElement(list, pos, error);
     RETURN_IF_LISTERROR((ListErrors) error->code);
 
-    list->next[list->prev[pos]] = list->next[pos];
-    list->prev[list->next[pos]] = list->prev[pos];
+    list->elems[list->elems[pos].prev].next = list->elems[pos].next;
+    list->elems[list->elems[pos].next].prev = list->elems[pos].prev;
 
     AddFreeElemInList(list, pos);
     list->size--;
-
-    if (list->size <= list->capacity / (2 * CPTY_MULTIPLIER))
-    {
-        MakeListShorter(list, error);
-        RETURN_IF_LISTERROR((ListErrors) error->code);
-    }
 
     return ListErrors::NONE;
 }
@@ -545,7 +386,7 @@ static void CheckRemovingElement(const list_t* list, const size_t pos, ErrorInfo
         return;
     }
 
-    if (list->data[pos] == POISON)
+    if (list->elems[pos].data == POISON)
     {
         error->code = (int) ListErrors::EMPTY_ELEMENT;
         error->data = list;
@@ -559,9 +400,9 @@ static inline void AddFreeElemInList(list_t* list, const size_t pos)
 {
     assert(list);
 
-    list->data[pos] = POISON;
-    list->prev[pos] = -1;
-    list->next[pos] = CHANGE_SIGN * list->free;
+    list->elems[pos].data = POISON;
+    list->elems[pos].prev = -1;
+    list->elems[pos].next = CHANGE_SIGN * list->free;
 
     list->free = pos;
 }
@@ -574,12 +415,9 @@ int ListDump(FILE* fp, const void* fast_list, const char* func, const char* file
 
     LOG_START_DUMP(func, file, line);
 
-    #pragma GCC diagnostic ignored "-Wcast-qual"
-    list_t* list = (list_t*) fast_list;
-    #pragma GCC diagnostic warning "-Wcast-qual"
+    const list_t* list = (const list_t*) fast_list;
 
     TextListDump(fp, list);
-
     DrawListGraph(list);
 
     LOG_END();
@@ -595,8 +433,7 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
 
     LOG_START(func, file, line);
 
-    #pragma GCC diagnostic ignored "-Wcast-qual"
-    struct ErrorInfo* error = (struct ErrorInfo*) err;
+    const struct ErrorInfo* error = (const struct ErrorInfo*) err;
 
     switch ((ListErrors) error->code)
     {
@@ -610,13 +447,19 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
             return (int) error->code;
 
         case (ListErrors::ALLOCATE_MEMORY):
-            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM LIST<br>\n", (char*) error->data);
+            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM LIST<br>\n", (const char*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (ListErrors::EMPTY_ELEMENT):
-            fprintf(fp, "CAN NOT REMOVE ALREADY EMPTY ELEMENT<br>\n");
-            DUMP_LIST((list_t*) error->data);
+            fprintf(fp, "CAN NOT OPERATE WITH ALREADY EMPTY ELEMENT<br>\n");
+            DUMP_LIST((const list_t*) error->data);
+            LOG_END();
+            return (int) error->code;
+
+        case (ListErrors::INVALID_SIZE):
+            fprintf(fp, "INVALID LIST SIZE<br>\n");
+            DUMP_LIST((const list_t*) error->data);
             LOG_END();
             return (int) error->code;
 
@@ -627,24 +470,28 @@ int PrintListError(FILE* fp, const void* err, const char* func, const char* file
             LOG_END();
             return (int) ListErrors::UNKNOWN;
     }
-    #pragma GCC diagnostic warning "-Wcast-qual"
 }
 
 //====================================================================================================
 
 static void TextListDump(FILE* fp, const list_t* list)
 {
-    fprintf(fp, "<b>DUMPING LIST</b><br>\n"
-                "FORMAT: IP -> [DATA, NEXT, PREV]<br>\n");
+    fprintf(fp, "<pre>");
+
+    fprintf(fp, "<b>DUMPING LIST</b><br>\n");
 
     PrintListElements(fp, list);
     PrintListInfo(fp, list);
+
+    fprintf(fp, "</pre>");
 }
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
 static inline void PrintListInfo(FILE* fp, const list_t* list)
 {
+    assert(list);
+
     fprintf(fp, "HEAD     > %d<br>\n"
                 "TAIL     > %d<br>\n"
                 "FREE     > %d<br>\n"
@@ -655,14 +502,17 @@ static inline void PrintListInfo(FILE* fp, const list_t* list)
 
 static inline void PrintListElements(FILE* fp, const list_t* list)
 {
+    assert(list);
+    fprintf(fp, "       <b>DATA  NEXT  PREV </b><br>\n");
+
     for (int i = 0; i < list->capacity; i++)
     {
         ChooseElementHtmlColor(fp, list, i);
 
-        if (list->data[i] != POISON)
-            fprintf(fp, "%3d -> [%d, %d, %d]</b></font><br>\n", i, list->data[i], list->next[i], list->prev[i]);
+        if (list->elems[i].data != POISON)
+            fprintf(fp, "%3d -> [%3d, %3d, %3d]</b></font>\n", i, list->elems[i].data, list->elems[i].next, list->elems[i].prev);
         else
-            fprintf(fp, "%3d -> [NaN, %d, %d]</b></font><br>\n", i, list->next[i], list->prev[i]);
+            fprintf(fp, "%3d -> [NaN, %3d, %3d]</b></font>\n", i, list->elems[i].next, list->elems[i].prev);
     }
 }
 
@@ -670,9 +520,11 @@ static inline void PrintListElements(FILE* fp, const list_t* list)
 
 static inline void ChooseElementHtmlColor(FILE* fp, const list_t* list, const size_t pos)
 {
-    if (list->prev[pos] == -1)
+    assert(list);
+
+    if (list->elems[pos].prev == -1)
         fprintf(fp, "<font color=\"#008000\"><b>");
-    else if (list->data[pos] == POISON)
+    else if (list->elems[pos].data == POISON)
         fprintf(fp, "<font color=\"#474747\"><b>");
     else
         fprintf(fp, "<font color=\"#0000FF\"><b>");
@@ -680,7 +532,7 @@ static inline void ChooseElementHtmlColor(FILE* fp, const list_t* list, const si
 
 //====================================================================================================
 
-static void DrawListGraph(list_t* list)
+static void DrawListGraph(const list_t* list)
 {
     assert(list);
 
@@ -718,9 +570,9 @@ static inline void ChooseVertexColor(FILE* dotf, const list_t* list, const size_
 {
     assert(list);
 
-    if (list->prev[pos] == -1)
+    if (list->elems[pos].prev == -1)
         fprintf(dotf, "fillcolor=\"lightgreen\", color = darkgreen,");
-    else if (list->data[pos] == POISON)
+    else if (list->elems[pos].data == POISON)
         fprintf(dotf, "fillcolor=\"lightgray\", color = black,");
     else
         fprintf(dotf, "fillcolor=\"lightblue\", color = darkblue,");
@@ -758,15 +610,15 @@ static inline void DrawListElements(FILE* dotf, const list_t* list)
 
         MarkImportantElements(dotf, list, i);
 
-        if (list->data[i] == POISON)
+        if (list->elems[i].data == POISON)
         {
             fprintf(dotf, "ip: %d | data: NaN| next: %d| prev: %d\" ];\n",
-                            i, list->next[i], list->prev[i]);
+                            i, list->elems[i].next, list->elems[i].prev);
         }
         else
         {
             fprintf(dotf, "ip: %d | data: %d| next: %d| prev: %d\" ];\n",
-                            i, list->data[i], list->next[i], list->prev[i]);
+                            i, list->elems[i].data, list->elems[i].next, list->elems[i].prev);
         }
     }
 }
@@ -793,11 +645,12 @@ static inline void DrawListArrows(FILE* dotf, const list_t* list)
 
     for (int i = 0; i < list->capacity; i++)
     {
-        if (list->prev[i] != -1)
-            fprintf(dotf, "%d -> %d [weight = 0, color = \"red\", constraint = false];\n", i, list->prev[i]);
+        if (list->elems[i].prev != -1)
+            fprintf(dotf, "%d -> %d [weight = 0, color = \"red\", constraint = false];\n",
+                            i,    list->elems[i].prev);
 
-        int next = list->next[i];
-        if (next < 0 || (next == 0 && list->prev[next] != i))
+        int next = list->elems[i].next;
+        if (next < 0 || (next == 0 && list->elems[next].prev != i))
         {
             next *= CHANGE_SIGN;
             fprintf(dotf, "%d -> %d [weight = 0, color = \"green\", constraint = false];\n", i, next);

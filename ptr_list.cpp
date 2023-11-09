@@ -1,10 +1,6 @@
 #include "ptr_list.h"
 #include "graphs.h"
 
-// TODO add get
-// TODO structs
-// TODO shorter - public
-
 static const char* DOT_FILE = "tmp.dot";
 static const int   POISON   = -2147483647;
 
@@ -12,10 +8,8 @@ static PtrListElem* InitListElement(const int data, PtrListElem* prev,
                                                     PtrListElem* next, ErrorInfo* error);
 static inline void DestructListElement(PtrListElem* elem);
 
-static void CheckRemovingElement(ptrlist_t* list, PtrListElem* pos, ErrorInfo* error);
-
-static inline PtrListElem* GetPtrListHead(const ptrlist_t* list);
-static inline PtrListElem* GetPtrListTail(const ptrlist_t* list);
+static void CheckRemovingElement(const ptrlist_t* list, PtrListElem* pos, ErrorInfo* error);
+static void CheckGettingElement(const ptrlist_t* list, PtrListElem* pos, ErrorInfo* error);
 
 // ========= TEXT DUMP =======
 
@@ -40,7 +34,6 @@ static inline void DrawPtrListArrows(FILE* dotf, const ptrlist_t* list);
 
 #ifdef CHECK_PTRLIST
 #undef CHECK_PTRLIST
-
 #endif
 #define CHECK_PTRLIST(list) do                                                              \
                             {                                                               \
@@ -67,14 +60,14 @@ PtrListErrors PtrListCtor(ptrlist_t* list, ErrorInfo* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-static inline PtrListElem* GetPtrListHead(const ptrlist_t* list)
+PtrListElem* GetPtrListHead(const ptrlist_t* list)
 {
     return list->fictive->next;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static inline PtrListElem* GetPtrListTail(const ptrlist_t* list)
+PtrListElem* GetPtrListTail(const ptrlist_t* list)
 {
     return list->fictive->prev;
 }
@@ -112,7 +105,7 @@ void PtrListDtor(ptrlist_t* list)
     size_t       elem_amt = list->size + 1;
     //     fictive --------------------^
 
-    while (elem_amt--) // TODO
+    for (int i = 0; i < elem_amt; i++)
     {
         DestructListElement(elem);
 
@@ -206,8 +199,12 @@ PtrListErrors PtrListRemoveElem(ptrlist_t* list, PtrListElem* pos, ErrorInfo* er
 
 //-----------------------------------------------------------------------------------------------------
 
-static void CheckRemovingElement(ptrlist_t* list, PtrListElem* pos, ErrorInfo* error)
+static void CheckRemovingElement(const ptrlist_t* list, PtrListElem* pos, ErrorInfo* error)
 {
+    assert(list);
+    assert(pos);
+    assert(error);
+
     if (list->size == 0)
     {
         error->code = (int) PtrListErrors::EMPTY_LIST;
@@ -216,7 +213,7 @@ static void CheckRemovingElement(ptrlist_t* list, PtrListElem* pos, ErrorInfo* e
 
     if (pos->data == POISON)
     {
-        error->code = (int) PtrListErrors::REMOVE_FICTIVE;
+        error->code = (int) PtrListErrors::FICTIVE_OPERATIONS;
         error->data = list;
         return;
     }
@@ -227,6 +224,46 @@ static void CheckRemovingElement(ptrlist_t* list, PtrListElem* pos, ErrorInfo* e
         error->data = pos;
         return;
     }
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void CheckGettingElement(const ptrlist_t* list, PtrListElem* pos, ErrorInfo* error)
+{
+    assert(list);
+    assert(pos);
+    assert(error);
+
+    if (pos->data == POISON)
+    {
+        error->code = (int) PtrListErrors::FICTIVE_OPERATIONS;
+        error->data = list;
+        return;
+    }
+
+    if (((pos->prev)->next) != pos || ((pos->next)->prev) != pos)
+    {
+        error->code = (int) PtrListErrors::UNKNOWN_ELEMENT;
+        error->data = pos;
+        return;
+    }
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+PtrListErrors GetPtrListElem(const ptrlist_t* list, PtrListElem* pos, int* destination, ErrorInfo* error)
+{
+    assert(list);
+    assert(pos);
+    assert(destination);
+    assert(error);
+
+    CheckGettingElement(list, pos, error);
+    RETURN_IF_PTRLISTERROR((PtrListErrors) error->code);
+
+    *destination = pos->data;
+
+    return PtrListErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -242,7 +279,7 @@ PtrListErrors PtrListVerify(const ptrlist_t* list)
     size_t       elem_amt = list->size + 1;
     //     fictive --------------------^
 
-    while (elem_amt--)
+    for (int i = 0; i < elem_amt; i++)
     {
         if (elem->next->prev != elem || elem->prev->next != elem)   return PtrListErrors::UNKNOWN_ELEMENT;
         elem = elem->next;
@@ -259,8 +296,7 @@ int PrintPtrListError(FILE* fp, const void* err, const char* func, const char* f
 
     LOG_START(func, file, line);
 
-    #pragma GCC diagnostic ignored "-Wcast-qual"
-    struct ErrorInfo* error = (struct ErrorInfo*) err;
+    const struct ErrorInfo* error = (const struct ErrorInfo*) err;
 
     switch ((PtrListErrors) error->code)
     {
@@ -274,25 +310,25 @@ int PrintPtrListError(FILE* fp, const void* err, const char* func, const char* f
             return (int) error->code;
 
         case (PtrListErrors::ALLOCATE_MEMORY):
-            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM POINTER LIST<br>\n", (char*) error->data);
+            fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s FROM POINTER LIST<br>\n", (const char*) error->data);
             LOG_END();
             return (int) error->code;
 
-        case (PtrListErrors::REMOVE_FICTIVE):
-            fprintf(fp, "CAN NOT REMOVE FICTIVE ELEMENT<br>\n");
-            DUMP_PTRLIST((ptrlist_t*) error->data);
+        case (PtrListErrors::FICTIVE_OPERATIONS):
+            fprintf(fp, "CAN NOT OPERATE WITH FICTIVE ELEMENT<br>\n");
+            DUMP_PTRLIST((const ptrlist_t*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (PtrListErrors::DAMAGED_FICTIVE):
             fprintf(fp, "DAMAGED FICTIVE ELEMENT<br>\n");
-            DUMP_PTRLIST((ptrlist_t*) error->data);
+            DUMP_PTRLIST((const ptrlist_t*) error->data);
             LOG_END();
             return (int) error->code;
 
         case (PtrListErrors::UNKNOWN_ELEMENT):
-            fprintf(fp, "TRYING TO REMOVE UNKNOWN ELEMENT<br>\n");
-            DUMP_PTRLIST((ptrlist_t*) error->data);
+            fprintf(fp, "TRYING TO OPERATE WITH UNKNOWN ELEMENT<br>\n");
+            DUMP_PTRLIST((const ptrlist_t*) error->data);
             LOG_END();
             return (int) error->code;
 
@@ -303,7 +339,6 @@ int PrintPtrListError(FILE* fp, const void* err, const char* func, const char* f
             LOG_END();
             return (int) PtrListErrors::UNKNOWN;
     }
-    #pragma GCC diagnostic warning "-Wcast-qual"
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -314,12 +349,9 @@ int PtrListDump(FILE* fp, const void* ptr_list, const char* func, const char* fi
 
     LOG_START_DUMP(func, file, line);
 
-    #pragma GCC diagnostic ignored "-Wcast-qual"
-    ptrlist_t* list = (ptrlist_t*) ptr_list;
-    #pragma GCC diagnostic warning "-Wcast-qual"
+    const ptrlist_t* list = (const ptrlist_t*) ptr_list;
 
     TextPtrListDump(fp, list);
-
     DrawPtrListGraph(list);
 
     LOG_END();
@@ -333,8 +365,14 @@ static void TextPtrListDump(FILE* fp, const ptrlist_t* list)
 {
     assert(list);
 
+    fprintf(fp, "<pre>");
+
+    fprintf(fp, "<b>DUMPING POINTERS LIST<\\b>\n");
+
     PrintPtrListInfo(fp, list);
     PrintPtrListElements(fp, list);
+
+    fprintf(fp, "<\pre>");
 }
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
@@ -373,7 +411,7 @@ static void PrintPtrListElements(FILE* fp, const ptrlist_t* list)
     PtrListElem* cur_elem   = list->fictive;
     int          elem_cnt   = 0;
 
-    while (elem_amt--)
+    for (int i = 0; i < elem_amt; i++)
     {
         ChooseElementHtmlColor(fp, cur_elem);
 
@@ -441,7 +479,7 @@ static inline void DrawPtrListElements(FILE* dotf, const ptrlist_t* list)
 
     #pragma GCC diagnostic ignored "-Wformat"
 
-    while (elem_amt--)
+    for (int i = 0; i < elem_amt; i++)
     {
         fprintf(dotf, "%lld [shape=Mrecord, style=filled, ", elem);
         if (elem->data == POISON)
@@ -487,7 +525,7 @@ static inline void CenterPtrListElements(FILE* dotf, const ptrlist_t* list)
     #pragma GCC diagnostic ignored "-Wformat"
 
     fprintf(dotf, "%lld", elem);
-    while (elem_amt--)
+    for (int i = 0; i < elem_amt; i++)
     {
         fprintf(dotf, "->%lld", elem->next);
 
@@ -510,7 +548,7 @@ static inline void DrawPtrListArrows(FILE* dotf, const ptrlist_t* list)
 
     #pragma GCC diagnostic ignored "-Wformat"
 
-    while (elem_amt--)
+    for (int i = 0; i < elem_amt; i++)
     {
         fprintf(dotf, "%lld -> %lld [color = \"red\"];\n", elem, elem->prev);
         fprintf(dotf, "%lld -> %lld [color = \"green\"];\n", elem, elem->next);

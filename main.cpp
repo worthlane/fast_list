@@ -61,28 +61,14 @@ int main(const int argc, const char* argv[])
 
     DUMP_LIST(&list);
 
-    /*ListRemoveElem(&list, 8, &error);
+    MakeListShorter(&list, 16, &error);
 
     DUMP_LIST(&list);
 
-    ListRemoveElem(&list, 4, &error);
+    int x = 0;
 
-    DUMP_LIST(&list);
-
-    ListRemoveElem(&list, 2, &error);
-
-    DUMP_LIST(&list);
-
-    ListRemoveElem(&list, 3, &error);
-    EXIT_IF_LISTERROR(&error);
-
-    DUMP_LIST(&list);
-
-    ListInsertAfterElem(&list, 0, 23, &a, &error);
-    ListInsertAfterElem(&list, a, 28, &b, &error);
-    ListInsertAfterElem(&list, a, 29, &b, &error);
-
-    DUMP_LIST(&list);*/
+    GetListElement(&list, 4, &x, &error);
+    printf("%d", x);
 
     ListDtor(&list);
 
